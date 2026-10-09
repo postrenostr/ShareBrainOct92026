@@ -111,10 +111,10 @@ describe("fixed 10words lessons", () => {
   it("preserves old audio and text when an upgrade fails, then retries", async () => {
     const { service, generator, rows } = setup();
     const saved = await service.getLesson("es", 1);
-    const oldAudio = Buffer.from("old mp3").toString("base64");
+    const oldAudio = Buffer.from("ID3old mp3").toString("base64");
     rows.get("es:1")!.audioBase64 = oldAudio;
     vi.mocked(generator.speak).mockRejectedValueOnce(new Error("TTS unavailable"));
-    await expect(service.getAudio("es", 1)).rejects.toThrow("TTS unavailable");
+    expect(await service.getAudio("es", 1)).toEqual(Buffer.from(oldAudio, "base64"));
     expect(rows.get("es:1")!.audioBase64).toBe(oldAudio);
     expect(await service.getLesson("es", 1)).toEqual(saved);
     expect(await service.getAudio("es", 1)).toEqual(recording);

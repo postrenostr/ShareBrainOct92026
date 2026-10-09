@@ -27,6 +27,13 @@ export function isPausedLessonAudio(audio: Buffer): boolean {
     audio.readUInt32LE(40) === audio.length - 44;
 }
 
+// Older saved recordings used MP3. Recognize their header before returning
+// them as a fallback; arbitrary bytes must not be served as playable audio.
+export function isLegacyMp3Audio(audio: Buffer): boolean {
+  return audio.length >= 3 && (audio.toString("ascii", 0, 3) === "ID3" ||
+    (audio[0] === 0xff && (audio[1] & 0xe0) === 0xe0));
+}
+
 export function joinLessonAudio(words: Buffer[], sentences: Buffer): Buffer {
   if (words.length !== 10 || [...words, sentences].some(pcm => !pcm.length || pcm.length % 2)) {
     throw new Error("Incomplete lesson audio");

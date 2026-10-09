@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { lessonText, type TenWordsLesson } from "@shared/tenWords";
 import { createTenWordsRouter } from "./tenWords";
 import { TenWordsService, type LessonStore, type SavedLesson } from "../services/tenWords/service";
+import { pcmWave } from "../services/tenWords/audio";
 
 const spanishLesson = {
   language: "es",
@@ -34,9 +35,9 @@ function isolatedStore(): LessonStore {
       const key = `${lesson.language}:${lesson.lessonNumber}`;
       if (!records.has(key)) records.set(key, { ...structuredClone(lesson), audioBase64: null });
     },
-    async saveAudioOnce(language, lessonNumber, audioBase64) {
+    async saveAudioIfUnchanged(language, lessonNumber, audioBase64, previousAudio) {
       const row = records.get(`${language}:${lessonNumber}`);
-      if (row && row.audioBase64 === null) row.audioBase64 = audioBase64;
+      if (row && row.audioBase64 === previousAudio) row.audioBase64 = audioBase64;
     },
   };
 }
@@ -55,7 +56,7 @@ function testApp(service: TenWordsService, authenticated = true) {
 describe("10words router and service integration", () => {
   it("keeps Spanish text and native-only audio identical across requests and a fresh service", async () => {
     const store = isolatedStore();
-    const audio = Buffer.from("isolated-audio-fixture");
+    const audio = pcmWave(Buffer.from([1, 0, 2, 0]));
     const generator = {
       generate: vi.fn(async () => ({
         words: structuredClone(spanishLesson.words),
@@ -72,9 +73,11 @@ describe("10words router and service integration", () => {
     expect(first.body).not.toHaveProperty("audioBase64");
 
     const narrated = await request(app).post("/api/10words/es/lessons/1/audio")
-      .expect(200).expect("Content-Type", /audio\/mpeg/);
+      .expect(200).expect("Content-Type", /audio\/wav/);
     expect(narrated.body).toEqual(audio);
-    expect(generator.speak).toHaveBeenCalledExactlyOnceWith(lessonText(spanishLesson));
+    expect(generator.speak).toHaveBeenCalledExactlyOnceWith({
+      words: spanishLesson.words, sentences: spanishLesson.sentences,
+    });
     expect((await request(app).post("/api/10words/es/lesson").send({ command: "Lesson 1" }).expect(200)).body)
       .toEqual(first.body);
     expect((await request(app).post("/api/10words/es/lessons/1/audio").expect(200)).body).toEqual(narrated.body);
@@ -91,6 +94,23 @@ describe("10words router and service integration", () => {
     expect(generator.speak).toHaveBeenCalledTimes(1);
     expect(forbiddenGenerator.generate).not.toHaveBeenCalled();
     expect(forbiddenGenerator.speak).not.toHaveBeenCalled();
+  });
+
+  it("serves legacy MP3 with its real MIME type when the paused-audio upgrade is unavailable", async () => {
+    const store = isolatedStore();
+    const legacy = Buffer.from("ID3saved-mp3-fixture");
+    await store.insertOnce(spanishLesson);
+    await store.saveAudioIfUnchanged("es", 1, legacy.toString("base64"), null);
+    const generator = {
+      generate: vi.fn(async () => { throw new Error("Saved text must not regenerate"); }),
+      speak: vi.fn(async () => { throw new Error("TTS unavailable"); }),
+    };
+    const app = testApp(new TenWordsService(store, generator));
+    const response = await request(app).post("/api/10words/es/lessons/1/audio")
+      .expect(200).expect("Content-Type", /audio\/mpeg/);
+    expect(response.body).toEqual(legacy);
+    expect((await store.find("es", 1))?.audioBase64).toBe(legacy.toString("base64"));
+    expect(generator.generate).not.toHaveBeenCalled();
   });
 
   it("rejects signed-out requests before storage or paid providers are contacted", async () => {

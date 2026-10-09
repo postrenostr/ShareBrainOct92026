@@ -3,6 +3,7 @@ import { createTenWordsAuth, type TenWordsApiAuthOptions } from "../middleware/t
 import { z } from "zod";
 import { parseLessonCommand, tenWordsLanguages, TEN_WORDS_LESSON_COUNT } from "@shared/tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
+import { isPausedLessonAudio } from "../services/tenWords/audio";
 
 export function createTenWordsRouter(service: TenWordsService, authenticate: RequestHandler, apiAuthOptions?: TenWordsApiAuthOptions) {
   const router = Router();
@@ -26,7 +27,10 @@ export function createTenWordsRouter(service: TenWordsService, authenticate: Req
     if (!/^\d+$/.test(req.params.lessonNumber)) return res.status(400).json({ message: "Invalid lesson number." });
     try {
       const audio = await service.getAudio(req.params.language, Number(req.params.lessonNumber));
-      res.set({ "Content-Type": "audio/wav", "Cache-Control": "private, no-cache" }).send(audio);
+      res.set({
+        "Content-Type": isPausedLessonAudio(audio) ? "audio/wav" : "audio/mpeg",
+        "Cache-Control": "private, no-cache",
+      }).send(audio);
     } catch (error) {
       console.error("10words audio request failed:", error instanceof Error ? error.name : "Unknown error");
       res.status(error instanceof TenWordsError ? error.status : 503).json({
