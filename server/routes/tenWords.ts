@@ -3,7 +3,6 @@ import { createTenWordsAuth, type TenWordsApiAuthOptions } from "../middleware/t
 import { z } from "zod";
 import { parseLessonCommand, tenWordsLanguages, TEN_WORDS_LESSON_COUNT } from "@shared/tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
-import { isPausedLessonAudio } from "../services/tenWords/audio";
 
 export function createTenWordsRouter(service: TenWordsService, authenticate: RequestHandler, apiAuthOptions?: TenWordsApiAuthOptions) {
   const router = Router();
@@ -28,7 +27,7 @@ export function createTenWordsRouter(service: TenWordsService, authenticate: Req
     try {
       const audio = await service.getAudio(req.params.language, Number(req.params.lessonNumber));
       res.set({
-        "Content-Type": isPausedLessonAudio(audio) ? "audio/wav" : "audio/mpeg",
+        "Content-Type": "audio/wav",
         "Cache-Control": "private, no-cache",
       }).send(audio);
     } catch (error) {
