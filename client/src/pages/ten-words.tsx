@@ -1,5 +1,4 @@
 import TenWordsKeys from "@/components/ten-words-keys";
-import TenWordsHdUpgrade from "@/components/ten-words-hd-upgrade";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { BookOpen, Play, Square, Loader2 } from "lucide-react";
@@ -125,9 +124,6 @@ export default function TenWords() {
       <p className="mt-2 text-sm text-muted-foreground">Fifty saved lessons, from simple everyday words to more challenging ideas. Choose your language.</p>
       <a href="#tenwords-api-client-keys" className="mt-3 inline-block text-sm underline">Manage API client keys</a>
       {params?.language && <p role="alert" className="mt-4">That language is not available. Choose one below.</p>}
-      <div className="mt-6 max-w-5xl">
-        <TenWordsHdUpgrade />
-      </div>
       <div className="mt-6 max-w-md">
         <label htmlFor="language-search" className="sr-only">Search languages</label>
         <Input id="language-search" placeholder="Search 100 languages" value={search} onChange={event => setSearch(event.target.value)} />

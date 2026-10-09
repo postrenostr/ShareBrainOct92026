@@ -1,3 +1,4 @@
+import TenWordsHdUpgrade from "@/components/ten-words-hd-upgrade";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
@@ -42,6 +43,10 @@ export default function AdminPanel() {
           <h1 className="text-3xl font-bold mb-2">Admin Panel</h1>
           <p className="text-gray-300">Welcome, {user.firstName || "Admin"}. Development tools and system management.</p>
         </div>
+
+        <section className="mb-8" aria-label="10words audio administration">
+          <TenWordsHdUpgrade />
+        </section>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Test Deployment */}
