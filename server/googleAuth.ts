@@ -20,7 +20,7 @@ export function getSession() {
   });
 
   const baseUrl =
-    process.env.GOOGLE_CALLBACK_URL?.replace(/\/auth\/google\/callback$/, "") ||
+    process.env.GOOGLE_CALLBACK_URL?.replace(/\/(?:api\/)?auth\/google\/callback\/?$/, "") ||
     process.env.PUBLIC_URL ||
     process.env.BASE_URL ||
     `http://localhost:${process.env.PORT || 5000}`;
@@ -54,7 +54,7 @@ export async function setupAuth(app: Express) {
 
   // Configure Google OAuth strategy
   const callbackBase =
-    process.env.GOOGLE_CALLBACK_URL?.replace(/\/api\/auth\/google\/callback$/, "") ||
+    process.env.GOOGLE_CALLBACK_URL?.replace(/\/(?:api\/)?auth\/google\/callback\/?$/, "") ||
     process.env.PUBLIC_URL ||
     process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
   const callbackURL = `${callbackBase.replace(/\/$/, "")}/api/auth/google/callback`;
@@ -145,7 +145,7 @@ export async function setupAuth(app: Express) {
     passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
   });
 
-  app.get("/api/auth/google/callback",
+  app.get(["/auth/google/callback", "/api/auth/google/callback"],
     passport.authenticate("google", {
       failureRedirect: "/",
       failureFlash: false

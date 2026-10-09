@@ -3,8 +3,8 @@ name: Google login domain
 description: User's domain requirement for Google login on this ShareBrain copy.
 ---
 
-The user wants to set up Google login using `sharebrains.net`. They said nothing is currently hosted on that domain.
+The user wants Google login on `sharebrains.net`, with the exact production callback `https://sharebrains.net/auth/google/callback`, without an `/api` prefix.
 
-**Why:** The user requested this rather than using the Replit development callback.
+**Why:** The user requested their own domain rather than the Replit development domain, and explicitly supplied this callback URL.
 
-**How to apply:** Confirm the intended domain and whether it serves the original app before changing domain routing. Configure production OAuth callbacks for the verified custom domain; do not present the development preview callback as the final production setup.
+**How to apply:** Preserve the exact user-selected production callback. Keep development's separate callback for compatibility; do not present its preview URL or `/api` callback path as the production setup.
