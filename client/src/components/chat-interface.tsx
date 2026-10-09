@@ -6,6 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useConversationParticipants } from "@/hooks/use-conversation-participants";
 import { InlineLessonViewer } from "./inline-lesson-viewer";
+import { parseStructuredLanguageLesson } from "@/lib/languageLesson";
+import { LessonAudioControl } from "./lesson-audio-control";
 import type { Message } from "@shared/schema";
 
 interface ChatInterfaceProps {
@@ -240,6 +242,7 @@ export default function ChatInterface({
   // Helper function to detect if a message contains a language lesson
   const isLanguageLessonMessage = (content: string): boolean => {
     if (!content) return false;
+    if (parseStructuredLanguageLesson(content)) return true;
     
     // Look for word-translation patterns
     const dashPattern = /[a-zA-ZÀ-ÿ\u0100-\u017F\u0400-\u04FF\u4E00-\u9FFF]{2,}\s*[-–]\s*[a-zA-Z\s]{2,}/g;
@@ -261,6 +264,8 @@ export default function ChatInterface({
 
   // Parse lesson content into translation and target-only sections
   function parseLessonContent(content: string) {
+    const structured = parseStructuredLanguageLesson(content);
+    if (structured) return structured;
     const pairs: { target: string; english: string }[] = [];
 
     // Pattern 1: word (translation) anywhere in the content
@@ -903,29 +908,10 @@ export default function ChatInterface({
                                       <p className="text-sm whitespace-pre-line text-white">{parsed.targetText}</p>
                                       
                                       {/* Play Audio Button for Native Content Only */}
-                                      {voiceEnabled && (
-                                        <div className="mt-3 flex justify-center">
-                                          <Button
-                                            variant={playingAudio === message.id ? "destructive" : "default"}
-                                            size="lg"
-                                            onClick={() => playingAudio === message.id ? stopAudio() : playAudio(message.id, parsed.targetText)}
-                                            disabled={playingAudio !== null && playingAudio !== message.id}
-                                            className="px-6 py-3 text-lg font-semibold"
-                                          >
-                                            {playingAudio === message.id ? (
-                                              <>
-                                                <Square className="h-5 w-5 mr-2" />
-                                                Stop Audio
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Play className="h-5 w-5 mr-2" />
-                                                Play Native Audio
-                                              </>
-                                            )}
-                                          </Button>
-                                        </div>
-                                      )}
+                                      <LessonAudioControl enabled={voiceEnabled}
+                                        playing={playingAudio === message.id}
+                                        disabled={playingAudio !== null && playingAudio !== message.id}
+                                        onClick={() => playingAudio === message.id ? stopAudio() : playAudio(message.id, parsed.targetText)} />
                                     </div>
                                   </div>
                                 );

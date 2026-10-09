@@ -2,9 +2,61 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, ArrowRight, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { completeTrialSetup, hasActiveTrial, refreshTrialAccess, trialErrorMessage, trialReturnPath } from "@/lib/trialSetup";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function TrialSuccess() {
   const [, setLocation] = useLocation();
+  const [state, setState] = useState<"checking" | "active" | "error">("checking");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const verify = async () => {
+      setState("checking");
+      try {
+        const parameters = new URLSearchParams(window.location.search);
+        const setupIntentId = parameters.get("setup_intent");
+        // The ID is enough for server verification; discard the secret even on failure.
+        window.history.replaceState(window.history.state, "", trialReturnPath(window.location));
+        if (setupIntentId) {
+          // Handles cards that require Stripe to redirect for authentication.
+          await completeTrialSetup(setupIntentId);
+        } else {
+          const response = await apiRequest("GET", "/api/user/subscription-status");
+          if (!hasActiveTrial(await response.json())) {
+            throw new Error("No active trial was found. Complete payment method setup to start your trial.");
+          }
+          await refreshTrialAccess();
+        }
+        window.history.replaceState(window.history.state, "", trialReturnPath(window.location, true));
+        if (!cancelled) setState("active");
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(trialErrorMessage(error));
+          setState("error");
+        }
+      }
+    };
+    void verify();
+    return () => { cancelled = true; };
+  }, [attempt]);
+
+  if (state === "checking") {
+    return <div className="min-h-screen flex items-center justify-center">Verifying your trial…</div>;
+  }
+  if (state === "error") {
+    return (
+      <div className="max-w-2xl mx-auto p-6 space-y-4">
+        <Alert variant="destructive"><AlertDescription>{errorMessage}</AlertDescription></Alert>
+        <Button onClick={() => setAttempt(value => value + 1)}>Retry verification</Button>
+        <Button variant="outline" onClick={() => setLocation("/trial-signup")}>Return to trial signup</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">

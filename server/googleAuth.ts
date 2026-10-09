@@ -4,6 +4,8 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { getPostLoginRedirect } from "../shared/authRedirect";
+import { postGoogleLogin } from "./middleware/postGoogleLogin";
 
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
   throw new Error("Missing required Google OAuth environment variables: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET");
@@ -20,7 +22,7 @@ export function getSession() {
   });
 
   const baseUrl =
-    process.env.GOOGLE_CALLBACK_URL?.replace(/\/auth\/google\/callback$/, "") ||
+    process.env.GOOGLE_CALLBACK_URL?.replace(/\/(?:api\/)?auth\/google\/callback\/?$/, "") ||
     process.env.PUBLIC_URL ||
     process.env.BASE_URL ||
     `http://localhost:${process.env.PORT || 5000}`;
@@ -54,12 +56,12 @@ export async function setupAuth(app: Express) {
 
   // Configure Google OAuth strategy
   const callbackBase =
-    process.env.GOOGLE_CALLBACK_URL?.replace(/\/api\/auth\/google\/callback$/, "") ||
+    process.env.GOOGLE_CALLBACK_URL?.replace(/\/(?:api\/)?auth\/google\/callback\/?$/, "") ||
     process.env.PUBLIC_URL ||
     process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
   const callbackURL = `${callbackBase.replace(/\/$/, "")}/api/auth/google/callback`;
 
-  const actualCallbackURL = process.env.GOOGLE_CALLBACK_URL || "https://sharebrain-uuxak.ondigitalocean.app/api/auth/google/callback";
+  const actualCallbackURL = process.env.GOOGLE_CALLBACK_URL || callbackURL;
 
   // Debug logging - remove after fixing
   console.log("=== GOOGLE AUTH DEBUG ===");
@@ -100,9 +102,9 @@ export async function setupAuth(app: Express) {
       const user = await storage.upsertUser(userData);
       console.log("User upserted successfully:", user);
 
-      // Don't start trial automatically - require payment method setup first
+      // Sign-in grants free access; paid trials still require explicit card setup.
       if (isFirstTimeLogin) {
-        console.log("New user detected, will require trial signup:", user.id);
+        console.log("New user detected; free-agent access is available:", user.id);
       }
 
       // Add flag to indicate first-time login
@@ -138,53 +140,19 @@ export async function setupAuth(app: Express) {
 
   // Auth routes
   app.get("/api/auth/google", (req, res, next) => {
-    const redirectTo = typeof req.query.redirectTo === "string" ? req.query.redirectTo : undefined;
-    if (redirectTo) {
-      (req.session as any).postAuthRedirect = redirectTo;
+    if (req.session) {
+      // Always overwrite old intent, including when no destination was requested.
+      (req.session as any).postAuthRedirect = getPostLoginRedirect(req.query.redirectTo);
     }
     passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
   });
 
-  app.get("/api/auth/google/callback",
+  app.get(["/auth/google/callback", "/api/auth/google/callback"],
     passport.authenticate("google", {
       failureRedirect: "/",
       failureFlash: false
     }),
-    async (req: any, res) => {
-      try {
-        console.log("Google Auth callback success:", req.user);
-        const user = req.user as any;
-
-        // honor requested redirect
-        let redirectTo = (req.session as any)?.postAuthRedirect;
-        if ((req.session as any)) delete (req.session as any).postAuthRedirect;
-
-        if (!redirectTo) {
-          const dbUser = await storage.getUser(user.id);
-
-          // Determine if subscription is required
-          const now = new Date();
-          const trialEndDate = dbUser?.trialEndDate ? new Date(dbUser.trialEndDate) : null;
-          const isTrialExpired = trialEndDate ? now > trialEndDate : true;
-
-          let needsSubscription = false;
-          if (!dbUser?.subscriptionStatus || dbUser.subscriptionStatus === "none") {
-            needsSubscription = true;
-          } else if (dbUser.subscriptionStatus === "trial" && (!dbUser.stripeCustomerId || isTrialExpired)) {
-            needsSubscription = true;
-          } else if (dbUser.subscriptionStatus === "expired" || dbUser.subscriptionStatus === "cancelled") {
-            needsSubscription = true;
-          }
-
-          redirectTo = needsSubscription ? "/trial-signup" : "/";
-        }
-
-        res.redirect(redirectTo);
-      } catch (error) {
-        console.error("Google Auth callback error:", error);
-        res.status(500).json({ error: "Authentication failed" });
-      }
-    }
+    postGoogleLogin
   );
 
   app.get("/api/logout", (req, res) => {

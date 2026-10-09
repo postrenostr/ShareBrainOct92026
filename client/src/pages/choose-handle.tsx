@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { User, ArrowRight, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getHandleSetupDestination } from "@shared/authRedirect";
 
 export default function ChooseHandle() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const [destination] = useState(() => getHandleSetupDestination(window.location));
   const [handle, setHandle] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -90,14 +92,17 @@ export default function ChooseHandle() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Username created!",
         description: "Your unique handle has been set successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/user/profile'] });
-      // Redirect to personal agent creation
-      setLocation("/create-personal-agent");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/user/profile'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] }),
+      ]);
+      // Resume the intended page; default onboarding leads to the free directory.
+      setLocation(destination);
     },
     onError: (error: any) => {
       toast({

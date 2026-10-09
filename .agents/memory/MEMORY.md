@@ -1,0 +1,7 @@
+- [Imported dependency security](imported-dependency-security.md) — imported lockfiles can be blocked by the package firewall; preserve runtime compatibility during updates.
+- [Google login domain](google-login-domain.md) — the user wants Google login on their own domain, not a Replit development domain.
+- [Stripe configuration](stripe-publishing.md) — the user wants the original direct Stripe SDK setup with their own keys in Secrets.
+- [Free-agent sign-in](free-agent-access.md) — signing in and username setup must allow existing free-agent use without card setup; keep paid features protected.
+- [Offline test safety](offline-test-safety.md) — dummy credentials and an in-memory store do not prevent network calls; isolate current database/provider boundaries.
+- [Built-in catalog publishing](catalog-publishing.md) — development seeding is not proof of live restoration; use a deliberate, idempotent published-data initialization path.
+- [Language lesson experience](language-lesson-experience.md) — the prior Catalan tutor returned ten words and ten sentences with playable pronunciation audio.

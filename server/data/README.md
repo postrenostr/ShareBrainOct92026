@@ -21,4 +21,12 @@ Follow these steps to add the example language tutor templates to your database:
 npm run seed:languages
 ```
 
-The script creates 100 language tutor templates using the languages listed in `server/data/topLanguages.ts`. Edit that file if you want to customize which tutors are generated.
+The script creates 100 public, active language tutor templates using the languages listed in `server/data/topLanguages.ts`. It uses the shared curriculum without generating paid translations, images, or audio. New tutors use `gpt-4o` through the application's existing chat routing.
+
+The same initializer runs when the application starts, so the published database receives missing built-in tutors after the user republishes. A development seed alone does not confirm the live catalog was updated.
+
+The initializer uses a transaction-scoped database lock to avoid duplicate entries across concurrent workers. It only repairs catalog records owned by the dedicated language-tutor system identity; private or user-created agents with matching names are left unchanged. Existing nonempty teaching instructions and model choices are retained. No schema changes are performed at startup.
+
+Built-in tutors have on-demand speech enabled and request exactly ten vocabulary words and ten example sentences per lesson. The chat Play Native Audio control reads the target-language entries without English translations. Nothing is translated or recorded during seeding; speech uses the existing OpenAI text-to-speech service only when a learner presses Play. Speech quality and language coverage depend on that service.
+
+On startup, the initializer also upgrades its exact earlier generated lesson prompt and enables voice on recognized built-in tutors. Custom nonempty prompts and model selections remain untouched. Republish to apply this repair in the live database.
