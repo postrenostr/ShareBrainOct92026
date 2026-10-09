@@ -1,16 +1,18 @@
-import { tenWordsContentSchema, tenWordsLanguages, lessonText, TEN_WORDS_LESSON_COUNT,
+import { tenWordsContentSchema, tenWordsLanguages, TEN_WORDS_LESSON_COUNT,
   type TenWordsContent, type TenWordsLanguage, type TenWordsLesson } from "@shared/tenWords";
+
+import { isPausedLessonAudio } from "./audio";
 
 export interface SavedLesson extends TenWordsLesson { audioBase64: string | null }
 export interface LessonStore {
   find(language: string, lessonNumber: number): Promise<SavedLesson | undefined>;
   // Database uniqueness chooses the winner; this must never replace existing content.
   insertOnce(lesson: TenWordsLesson): Promise<void>;
-  saveAudioOnce(language: string, lessonNumber: number, audioBase64: string): Promise<void>;
+  saveAudioIfUnchanged(language: string, lessonNumber: number, audioBase64: string, previousAudio: string | null): Promise<void>;
 }
 export interface LessonGenerator {
   generate(language: TenWordsLanguage, lessonNumber: number): Promise<TenWordsContent>;
-  speak(text: string): Promise<Buffer>;
+  speak(lesson: TenWordsContent): Promise<Buffer>;
 }
 export class TenWordsError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -73,13 +75,18 @@ export class TenWordsService {
     const lesson = await this.getLesson(language, lessonNumber);
     let saved = await this.store.find(language, lessonNumber);
     if (!saved) throw new Error("Lesson not found");
-    if (!saved.audioBase64) {
-      const audio = await this.generator.speak(lessonText(lesson));
-      if (!audio.length) throw new Error("Empty lesson audio");
-      await this.store.saveAudioOnce(language, lessonNumber, audio.toString("base64"));
+    if (!saved.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
+      const previousAudio = saved.audioBase64;
+      const audio = await this.generator.speak({ words: lesson.words, sentences: lesson.sentences });
+      if (!isPausedLessonAudio(audio)) throw new Error("Invalid paused lesson audio");
+      // Upgrade old MP3 recordings without changing the saved lesson. If another
+      // process has already upgraded the audio, retain its winner.
+      await this.store.saveAudioIfUnchanged(language, lessonNumber, audio.toString("base64"), previousAudio);
       saved = await this.store.find(language, lessonNumber);
     }
-    if (!saved?.audioBase64) throw new Error("Lesson audio could not be saved");
+    if (!saved?.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
+      throw new Error("Paused lesson audio could not be saved");
+    }
     return Buffer.from(saved.audioBase64, "base64");
   }
 }

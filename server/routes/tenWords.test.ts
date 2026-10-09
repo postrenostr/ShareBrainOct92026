@@ -1,13 +1,14 @@
 import express from "express";
 import request from "supertest";
 import { describe, it, expect, vi } from "vitest";
+import { pcmWave } from "../services/tenWords/audio";
 import { createTenWordsRouter } from "./tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
 
 function setup(authenticated = true) {
   const service = {
     getLesson: vi.fn(async () => ({ language: "es", lessonNumber: 1, words: ["Hola"], sentences: ["Hola."] })),
-    getAudio: vi.fn(async () => Buffer.from("mp3")),
+    getAudio: vi.fn(async () => pcmWave(Buffer.from([1, 0]))),
   };
   const app = express();
   app.use(express.json());
@@ -29,6 +30,7 @@ describe("10words API", () => {
     const { app, service } = setup();
     const catalog = await request(app).get("/api/10words/languages").expect(200);
     expect(catalog.body.lessonCount).toBe(50);
+    expect(catalog.body.languages).toHaveLength(100);
     expect(catalog.body.languages.some((language: { code: string }) => language.code === "es")).toBe(true);
     await request(app).post("/api/10words/es/lesson").send({ command: "Lesson 1" }).expect(200);
     expect(service.getLesson).toHaveBeenCalledWith("es", 1);
@@ -41,10 +43,11 @@ describe("10words API", () => {
     expect(service.getLesson).not.toHaveBeenCalled();
     expect(service.getAudio).not.toHaveBeenCalled();
   });
-  it("serves stored audio as mp3", async () => {
+  it("serves stored audio as WAV", async () => {
     const { app, service } = setup();
-    const response = await request(app).post("/api/10words/es/lessons/1/audio").expect(200).expect("Content-Type", /audio\/mpeg/);
-    expect(response.body.toString()).toBe("mp3");
+    const response = await request(app).post("/api/10words/es/lessons/1/audio").expect(200).expect("Content-Type", /audio\/wav/);
+    expect(response.body).toEqual(pcmWave(Buffer.from([1, 0])));
+    expect(response.headers["cache-control"]).toBe("private, no-cache");
     expect(service.getAudio).toHaveBeenCalledWith("es", 1);
   });
   it("reports unsupported language errors without AI fallback text", async () => {

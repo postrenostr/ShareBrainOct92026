@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { TenWordsService, type LessonStore, type SavedLesson, type LessonGenerator } from "./service";
-import { lessonText, type TenWordsContent } from "@shared/tenWords";
+import { type TenWordsContent } from "@shared/tenWords";
+
+import { pcmWave } from "./audio";
+const recording = pcmWave(Buffer.from([1, 0, 2, 0]));
 
 const content: TenWordsContent = {
   words: ["Hola", "Agua", "Comida", "Casa", "Amigo", "Libro", "Bueno", "Sí", "No", "Gracias"],
@@ -15,13 +18,13 @@ function setup() {
     insertOnce: vi.fn(async lesson => {
       if (!rows.has(key(lesson.language, lesson.lessonNumber))) rows.set(key(lesson.language, lesson.lessonNumber), { ...lesson, audioBase64: null });
     }),
-    saveAudioOnce: vi.fn(async (language, number, audioBase64) => {
+    saveAudioIfUnchanged: vi.fn(async (language, number, audioBase64, previousAudio) => {
       const row = rows.get(key(language, number));
-      if (row && row.audioBase64 === null) row.audioBase64 = audioBase64;
+      if (row && row.audioBase64 === previousAudio) row.audioBase64 = audioBase64;
     }),
   };
   const generator: LessonGenerator = {
-    generate: vi.fn(async () => content), speak: vi.fn(async () => Buffer.from("saved mp3")),
+    generate: vi.fn(async () => content), speak: vi.fn(async () => recording),
   };
   return { service: new TenWordsService(store, generator), store, generator, rows };
 }
@@ -80,8 +83,8 @@ describe("fixed 10words lessons", () => {
   it("narrates exactly the persisted words and sentences and reuses stored audio", async () => {
     const { service, generator, store } = setup();
     const first = await service.getAudio("es", 1);
-    expect(first.toString()).toBe("saved mp3");
-    expect(generator.speak).toHaveBeenCalledWith(lessonText(content));
+    expect(first).toEqual(recording);
+    expect(generator.speak).toHaveBeenCalledWith(content);
     expect(await new TenWordsService(store, generator).getAudio("es", 1)).toEqual(first);
     expect(generator.speak).toHaveBeenCalledTimes(1);
   });
@@ -95,14 +98,42 @@ describe("fixed 10words lessons", () => {
     expect(generator.generate).toHaveBeenCalledTimes(1);
     expect(generator.speak).toHaveBeenCalledTimes(2);
   });
+  it("upgrades cached MP3 audio once, without regenerating lesson text", async () => {
+    const { service, generator, rows, store } = setup();
+    await service.getLesson("es", 1);
+    rows.get("es:1")!.audioBase64 = Buffer.from("old mp3").toString("base64");
+    expect(await service.getAudio("es", 1)).toEqual(recording);
+    expect(await new TenWordsService(store, generator).getAudio("es", 1)).toEqual(recording);
+    expect(generator.generate).toHaveBeenCalledTimes(1);
+    expect(generator.speak).toHaveBeenCalledTimes(1);
+    expect(store.saveAudioIfUnchanged).toHaveBeenCalledWith("es", 1, recording.toString("base64"), Buffer.from("old mp3").toString("base64"));
+  });
+  it("preserves old audio and text when an upgrade fails, then retries", async () => {
+    const { service, generator, rows } = setup();
+    const saved = await service.getLesson("es", 1);
+    const oldAudio = Buffer.from("old mp3").toString("base64");
+    rows.get("es:1")!.audioBase64 = oldAudio;
+    vi.mocked(generator.speak).mockRejectedValueOnce(new Error("TTS unavailable"));
+    await expect(service.getAudio("es", 1)).rejects.toThrow("TTS unavailable");
+    expect(rows.get("es:1")!.audioBase64).toBe(oldAudio);
+    expect(await service.getLesson("es", 1)).toEqual(saved);
+    expect(await service.getAudio("es", 1)).toEqual(recording);
+    expect(generator.generate).toHaveBeenCalledTimes(1);
+  });
+  it("does not save incomplete audio", async () => {
+    const { service, generator, store } = setup();
+    vi.mocked(generator.speak).mockResolvedValue(Buffer.from("bad"));
+    await expect(service.getAudio("es", 1)).rejects.toThrow("Invalid paused lesson audio");
+    expect(store.saveAudioIfUnchanged).not.toHaveBeenCalled();
+  });
   it("coalesces audio requests and serves the database audio winner", async () => {
     const { service, generator, store } = setup();
-    vi.mocked(store.saveAudioOnce).mockImplementationOnce(async (language, number) => {
+    vi.mocked(store.saveAudioIfUnchanged).mockImplementationOnce(async (language, number) => {
       const row = await store.find(language, number);
-      if (row) row.audioBase64 = Buffer.from("other process audio").toString("base64");
+      if (row) row.audioBase64 = pcmWave(Buffer.from([3, 0])).toString("base64");
     });
     const results = await Promise.all([service.getAudio("es", 1), service.getAudio("es", 1)]);
-    expect(results.map(audio => audio.toString())).toEqual(["other process audio", "other process audio"]);
+    expect(results).toEqual([pcmWave(Buffer.from([3, 0])), pcmWave(Buffer.from([3, 0]))]);
     expect(generator.speak).toHaveBeenCalledTimes(1);
   });
 });
