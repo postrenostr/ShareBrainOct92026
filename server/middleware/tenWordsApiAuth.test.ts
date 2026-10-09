@@ -1,64 +1,44 @@
 import express from "express";
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createTenWordsAuth } from "./tenWordsApiAuth";
-
-const key = "a".repeat(64);
-function setup(configured: string | undefined = key, authenticated = false, now = () => 100000) {
-  const sessionAuth = vi.fn((_req, res, next) => {
-    if (authenticated) next(); else res.status(401).json({ message: "Session required" });
-  });
+const key = "tw_" + "a".repeat(64);
+function setup(result: "ok" | "invalid" | "forbidden" | "limited" = "ok", signedIn = false) {
+  const authorize = vi.fn(async () => result);
   const app = express();
-  app.get("/10words", createTenWordsAuth(sessionAuth, { getApiKey: () => configured, maxRequests: 2, now }), (_req, res) => res.json({ ok: true }));
-  return { app, sessionAuth };
+  app.use(createTenWordsAuth((_req, res, next) => signedIn ? next() : void res.sendStatus(401), { clients: { authorize } }));
+  app.use((_req, res) => res.json({ ok: true }));
+  return { app, authorize };
 }
-
-describe("10words integration authentication", () => {
-  it("accepts the dedicated Bearer key without a session", async () => {
-    const { app, sessionAuth } = setup();
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(200);
-    expect(sessionAuth).not.toHaveBeenCalled();
+describe("10words client authentication", () => {
+  it("allows sessions without a key", async () => { await request(setup("ok", true).app).get("/languages").expect(200); });
+  it("requires credentials", async () => { await request(setup().app).get("/languages").expect(401); });
+  it("rejects malformed headers even with a session", async () => {
+    const { app, authorize } = setup("ok", true);
+    for (const header of ["Basic abc", "Bearer short", "Bearer " + "a".repeat(64), `Bearer ${key} extra`])
+      await request(app).get("/languages").set("Authorization", header).expect(401);
+    expect(authorize).not.toHaveBeenCalled();
   });
-  it("keeps existing session access when no Authorization header is supplied", async () => {
-    const { app, sessionAuth } = setup("", true);
-    await request(app).get("/10words").expect(200);
-    expect(sessionAuth).toHaveBeenCalledTimes(1);
+  it("does not accept query credentials", async () => { await request(setup().app).get(`/languages?api_key=${key}`).expect(401); });
+  it("maps endpoint permissions", async () => {
+    const { app, authorize } = setup();
+    for (const [path, scope] of [["/languages", "languages:read"], ["/es/lesson", "lessons:read"], ["/fr/lessons/10/audio", "audio:read"]]) {
+      const call = path === "/languages" ? request(app).get(path) : request(app).post(path);
+      await call.set("Authorization", `Bearer ${key}`).expect(200);
+      expect(authorize).toHaveBeenLastCalledWith(key, scope);
+    }
+    await request(app).post("/clients").set("Authorization", `Bearer ${key}`).expect(403);
   });
-  it("rejects anonymous requests", async () => {
-    await request(setup().app).get("/10words").expect(401);
+  it("returns invalid, forbidden and limited status codes", async () => {
+    for (const [result, status] of [["invalid",401], ["forbidden",403], ["limited",429]] as const) {
+      const response = await request(setup(result).app).get("/languages").set("Authorization", `Bearer ${key}`).expect(status);
+      expect(JSON.stringify(response.body)).not.toContain(key);
+      if (status === 429) expect(response.headers["retry-after"]).toBe("60");
+    }
   });
-  it.each([`Bearer ${"b".repeat(64)}`, "Bearer short", `Basic ${key}`, `Bearer ${key} extra`, `Bearer ${"a".repeat(257)}`])("rejects malformed/wrong credentials even with a valid session", async header => {
-    const { app, sessionAuth } = setup(key, true);
-    const response = await request(app).get("/10words").set("Authorization", header).expect(401);
-    expect(response.headers["www-authenticate"]).toBe("Bearer");
-    expect(sessionAuth).not.toHaveBeenCalled();
-    expect(JSON.stringify(response.body)).not.toContain(key);
-  });
-  it("disables key access when no key is configured, without disrupting sessions", async () => {
-    const { app } = setup("", true);
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(401);
-    await request(app).get("/10words").expect(200);
-  });
-  it("does not accept a key from a query parameter", async () => {
-    await request(setup().app).get(`/10words?api_key=${key}`).expect(401);
-  });
-  it("supports rotation without accepting the old key", async () => {
-    let configured = key;
-    const app = express();
-    app.get("/10words", createTenWordsAuth((_req, res) => { res.sendStatus(401); }, { getApiKey: () => configured }), (_req, res) => res.sendStatus(200));
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(200);
-    configured = "b".repeat(64);
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(401);
-    await request(app).get("/10words").set("Authorization", `Bearer ${configured}`).expect(200);
-  });
-  it("limits authenticated API calls and resets the window", async () => {
-    let time = 100000;
-    const { app } = setup(key, false, () => time);
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(200);
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(200);
-    const response = await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(429);
-    expect(response.headers["retry-after"]).toBe("60");
-    time += 60000;
-    await request(app).get("/10words").set("Authorization", `Bearer ${key}`).expect(200);
+  it("fails closed during database errors", async () => {
+    const { app, authorize } = setup(); authorize.mockRejectedValueOnce(new Error("secret"));
+    const response = await request(app).get("/languages").set("Authorization", `Bearer ${key}`).expect(503);
+    expect(JSON.stringify(response.body)).not.toContain("secret");
   });
 });
