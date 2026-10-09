@@ -45,3 +45,6 @@ GOOGLE_CALLBACK_URL = "https://a668e9cd-9604-4122-afde-12967ff56c7d-00-iwk9b0y80
 
 [userenv.production]
 GOOGLE_CALLBACK_URL = "https://sharebrains.net/api/auth/google/callback"
+
+[userenv.shared]
+GOOGLE_CLIENT_ID = "544493057892-ou6ek6ed9mi3ahq8ebk4ea53fafk6ern.apps.googleusercontent.com"
