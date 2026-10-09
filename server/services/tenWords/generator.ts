@@ -79,7 +79,7 @@ Otherwise return {"valid":false}.` },
     },
     async speak(text) {
       const response = await getClient().audio.speech.create({
-        model: "tts-1", voice: "alloy", input: text, response_format: "mp3",
+        model: "tts-1-hd", voice: "alloy", input: text, response_format: "mp3",
       });
       return Buffer.from(await response.arrayBuffer());
     },

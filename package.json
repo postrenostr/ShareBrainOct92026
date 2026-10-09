@@ -14,6 +14,7 @@
     "db:push": "drizzle-kit push",
     "db:10words": "tsx server/scripts/migrateTenWords.ts",
     "audio:10words:test-hd": "tsx server/scripts/testTenWordsHd.ts",
+    "audio:10words:upgrade-hd": "tsx server/scripts/upgradeTenWordsHd.ts",
     "seed:languages": "tsx server/scripts/bulkCreateLanguageTutors.ts",
     "seed:lesson-cache": "tsx server/scripts/populateLessonCache.ts"
   },

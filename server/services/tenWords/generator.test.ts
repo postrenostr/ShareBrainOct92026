@@ -77,7 +77,7 @@ describe("10words generation and speech", () => {
     const { generator, speech } = setup();
     await generator.speak(lessonText(content));
     expect(speech).toHaveBeenCalledTimes(1);
-    expect(speech).toHaveBeenCalledWith({ model: "tts-1", voice: "alloy", input: lessonText(content), response_format: "mp3" });
+    expect(speech).toHaveBeenCalledWith({ model: "tts-1-hd", voice: "alloy", input: lessonText(content), response_format: "mp3" });
   });
 
 });
