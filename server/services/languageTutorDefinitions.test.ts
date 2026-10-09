@@ -29,9 +29,12 @@ describe("public language tutor catalog", () => {
         userId: LANGUAGE_TUTOR_OWNER, category: LANGUAGE_TUTOR_CATEGORY,
         isTemplate: true, status: "active", isPrivate: false,
         isPubliclyVisible: true, isPersonal: false, isSystemAgent: true,
-        isScriptEditable: false, voiceEnabled: false, imageEnabled: false,
+        isScriptEditable: false, voiceEnabled: true, imageEnabled: false,
         hasSharedMemory: false, hasFriendsMemory: false,
       });
+      expect(row.systemPrompt).toContain("exactly 10 words and exactly 10 sentences");
+      expect(row.systemPrompt).toContain('Vocabulary:');
+      expect(row.systemPrompt).toContain('Sentences:');
     }
   });
   it("creates a missing catalog and does nothing on a complete rerun", () => {
@@ -66,5 +69,23 @@ describe("public language tutor catalog", () => {
   it("fails explicitly on duplicate built-in names", () => {
     expect(() => planLanguageTutorCatalog([rows()[0], { ...rows()[0], id: 999 }]))
       .toThrow("Duplicate built-in language tutor");
+  });
+  it("upgrades our prior generated prompts and enables speech once without changing custom prompts", () => {
+    const current = rows();
+    const upgraded = current[0].systemPrompt!;
+    const start = upgraded.indexOf("For each requested lesson,");
+    const end = upgraded.indexOf("\nExplain relevant grammar");
+    const old = upgraded.slice(0, start) +
+      "For each requested lesson, provide the ten target-language translations, helpful pronunciation or transliteration, and short example sentences with explanations. Keep lessons readable and offer a short practice exercise." +
+      upgraded.slice(end);
+    current[0] = { ...current[0], voiceEnabled: false, systemPrompt: old };
+    current[1] = { ...current[1], voiceEnabled: false, systemPrompt: "Custom preserved prompt" };
+    const plan = planLanguageTutorCatalog(current);
+    expect(plan.repair).toHaveLength(2);
+    expect(plan.repair[0].values).toMatchObject({ voiceEnabled: true, systemPrompt: upgraded });
+    expect(plan.repair[1].values).toMatchObject({ voiceEnabled: true });
+    expect(plan.repair[1].values).not.toHaveProperty("systemPrompt");
+    for (const repair of plan.repair) Object.assign(current.find(row => row.id === repair.id)!, repair.values);
+    expect(planLanguageTutorCatalog(current).repair).toEqual([]);
   });
 });

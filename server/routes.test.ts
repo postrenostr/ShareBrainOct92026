@@ -22,6 +22,7 @@ import { storage } from './storage'
 import { db } from './db'
 import { intelligentMemoryService } from './intelligentMemoryService'
 import { buildLanguageTutorDefinitions } from './services/languageTutorDefinitions'
+import * as ai from './openai'
 
 import { registerRoutes } from './routes'
 
@@ -106,6 +107,24 @@ describe('GET /api/agents', () => {
 })
 
 describe('POST /api/chat', () => {
+  it('delivers a requested Catalan lesson for a free user through the real chat route', async () => {
+    const tutor = await storage.createAgent(buildLanguageTutorDefinitions().find(row => row.name === 'Catalan Language Tutor')!)
+    await storage.updateUser('user-1', { subscriptionStatus: 'none', stripeCustomerId: null })
+    const content = `Lesson 1\nVocabulary:\n${Array.from({ length: 10 }, () => 'hola — hello').join('\n')}\nSentences:\n${Array.from({ length: 10 }, () => 'Hola, amic. — Hello, friend.').join('\n')}`
+    const available = vi.spyOn(ai, 'isOpenAIAvailable').mockResolvedValue(true)
+    const generate = vi.spyOn(ai, 'generateAgentResponse').mockResolvedValue({ content, responseTime: 1, tokensUsed: 100 })
+    const memory = vi.spyOn(intelligentMemoryService, 'analyzeForMemory').mockResolvedValue({ isMemoryRequest: false } as any)
+    try {
+      const response = await request(app).post('/api/chat').send({ agentId: tutor.id, message: 'lesson 1' }).expect(200)
+      expect(response.body.content).toBe(content)
+      expect(generate).toHaveBeenCalledTimes(1)
+      expect(generate.mock.calls[0][0]).toContain('exactly 10 words and exactly 10 sentences')
+      expect(generate.mock.calls[0][0]).toContain('translate into Catalan')
+      expect(generate.mock.calls[0][1]).toBe('lesson 1')
+      const detail = await request(app).get(`/api/agents/${tutor.id}`).expect(200)
+      expect(detail.body.voiceEnabled).toBe(true)
+    } finally { available.mockRestore(); generate.mockRestore(); memory.mockRestore() }
+  })
   it('lets a user without a trial or card open a system-owned language tutor', async () => {
     const tutor = await storage.createAgent(buildLanguageTutorDefinitions().find(row => row.name === 'Spanish Language Tutor')!)
     await storage.updateUser('user-1', {
@@ -169,6 +188,22 @@ describe('POST /api/chat', () => {
       .post('/api/chat')
       .send({ message: 'hi' })
       .expect(401)
+  })
+})
+
+describe('restored language tutor speech', () => {
+  it('accepts on-demand native speech for a restored tutor without a card', async () => {
+    const tutor = await storage.createAgent(buildLanguageTutorDefinitions().find(row => row.name === 'Catalan Language Tutor')!)
+    await storage.updateUser('user-1', { subscriptionStatus: 'none', stripeCustomerId: null })
+    const available = vi.spyOn(ai, 'isOpenAIAvailable').mockResolvedValue(true)
+    const speech = vi.spyOn(ai, 'generateSpeech').mockResolvedValue({ audio: Buffer.from('fixture-mp3'), responseTime: 1 })
+    try {
+      const response = await request(app).post('/api/speech')
+        .send({ agentId: tutor.id, text: 'hola\naigua\nHola, amic.\nVull aigua.' }).expect(200)
+      expect(response.headers['content-type']).toContain('audio/mpeg')
+      expect(speech).toHaveBeenCalledWith('hola\naigua\nHola, amic.\nVull aigua.', 'alloy', 'tts-1')
+      expect(speech).toHaveBeenCalledTimes(1)
+    } finally { available.mockRestore(); speech.mockRestore() }
   })
 })
 
