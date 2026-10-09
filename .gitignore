@@ -5,3 +5,6 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .env
+
+# Local voice comparison samples
+/artifacts/10words-audio-samples/

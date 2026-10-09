@@ -107,3 +107,7 @@ Management endpoints under `/api/10words/clients` require a signed-in browser se
 - `POST /:id/revoke` with `{}` → revoked client metadata.
 
 Mutations require JSON and reject foreign browser origins. All operations enforce owner identity; another owner’s IDs return 404 on mutation. Removing a user also removes their client keys.
+
+## Spanish Lesson 1 HD comparison
+
+Run `npm run audio:10words:test-hd` in the application environment with secure `DATABASE_URL` and `OPENAI_API_KEY` configuration. It reads the existing Spanish Lesson 1 and makes one `tts-1-hd` request using Alloy, default speed and MP3 output. Normal TTS charges apply. The sample is saved under `artifacts/10words-audio-samples/` with a timestamped filename, excluded from Git. Play/download that file to compare it with current lesson playback. It does not create a lesson, change lesson text, replace saved audio, or change the production TTS model. If Spanish Lesson 1 is missing, the command fails rather than generating different content.
