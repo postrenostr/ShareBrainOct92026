@@ -1,14 +1,13 @@
 import express from "express";
 import request from "supertest";
 import { describe, it, expect, vi } from "vitest";
-import { pcmWave } from "../services/tenWords/audio";
 import { createTenWordsRouter } from "./tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
 
 function setup(authenticated = true, apiKey?: string) {
   const service = {
     getLesson: vi.fn(async () => ({ language: "es", lessonNumber: 1, words: ["Hola"], sentences: ["Hola."] })),
-    getAudio: vi.fn(async () => pcmWave(Buffer.from([1, 0]))),
+    getAudio: vi.fn(async () => Buffer.from("ID3audio")),
   };
   const app = express();
   app.use(express.json());
@@ -26,7 +25,7 @@ describe("10words API", () => {
     expect(service.getLesson).not.toHaveBeenCalled();
     expect(service.getAudio).not.toHaveBeenCalled();
   });
-  it("allows API-key access to catalog, lesson JSON and WAV audio without a browser login", async () => {
+  it("allows API-key access to catalog, lesson JSON and MP3 audio without a browser login", async () => {
     const key = "tw_" + "a".repeat(64);
     const { app, service } = setup(false, key);
     await request(app).get("/api/10words/languages").set("Authorization", `Bearer ${key}`).expect(200);
@@ -35,7 +34,7 @@ describe("10words API", () => {
     expect(lesson.body.words).toEqual(["Hola"]);
     expect(service.getLesson).toHaveBeenCalledWith("fr", 10);
     await request(app).post("/api/10words/fr/lessons/10/audio").set("Authorization", `Bearer ${key}`)
-      .expect(200).expect("Content-Type", /audio\/wav/);
+      .expect(200).expect("Content-Type", /audio\/mpeg/);
     expect(service.getAudio).toHaveBeenCalledWith("fr", 10);
   });
   it("lists the language agents and accepts Lesson 1", async () => {
@@ -55,10 +54,10 @@ describe("10words API", () => {
     expect(service.getLesson).not.toHaveBeenCalled();
     expect(service.getAudio).not.toHaveBeenCalled();
   });
-  it("serves stored audio as WAV", async () => {
+  it("serves stored audio as MP3", async () => {
     const { app, service } = setup();
-    const response = await request(app).post("/api/10words/es/lessons/1/audio").expect(200).expect("Content-Type", /audio\/wav/);
-    expect(response.body).toEqual(pcmWave(Buffer.from([1, 0])));
+    const response = await request(app).post("/api/10words/es/lessons/1/audio").expect(200).expect("Content-Type", /audio\/mpeg/);
+    expect(response.body).toEqual(Buffer.from("ID3audio"));
     expect(response.headers["cache-control"]).toBe("private, no-cache");
     expect(service.getAudio).toHaveBeenCalledWith("es", 1);
   });

@@ -73,19 +73,13 @@ describe("10words generation and speech", () => {
     expect(JSON.parse(create.mock.calls[0][0].messages[1].content).curriculum).toContain("Responsibility");
     expect(JSON.parse(create.mock.calls[0][0].messages[1].content).earlierVocabulary).toContain("Water");
   });
-  it("narrates words separately with slower speech and no helper prose", async () => {
+  it("narrates the whole lesson in one MP3 request without added pauses", async () => {
     const { generator, speech } = setup();
-    const audio = await generator.speak(content);
-    expect(speech).toHaveBeenCalledTimes(11);
-    expect(speech.mock.calls.map(call => (call[0] as { input: string }).input)).toEqual([...content.words, content.sentences.join("\n")]);
-    expect(speech).toHaveBeenCalledWith({ model: "tts-1", voice: "alloy", input: "Hola", response_format: "pcm", speed: 0.9 });
-    expect(audio.toString("ascii", 0, 4)).toBe("RIFF");
+    await generator.speak(lessonText(content));
+    expect(speech).toHaveBeenCalledTimes(1);
+    expect(speech).toHaveBeenCalledWith({ model: "tts-1", voice: "alloy", input: lessonText(content), response_format: "mp3" });
   });
-  it("does not produce a recording when a word narration fails", async () => {
-    const { generator, speech } = setup();
-    speech.mockRejectedValueOnce(new Error("TTS unavailable"));
-    await expect(generator.speak(content)).rejects.toThrow("TTS unavailable");
-  });
+
 });
 
 describe("lesson contract", () => {

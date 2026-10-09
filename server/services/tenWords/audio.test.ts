@@ -1,56 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isPausedLessonAudio, joinLessonAudio, pcmWave, SAMPLE_RATE, WORD_PAUSE_MS, SECTION_PAUSE_MS } from "./audio";
+import { isMp3Audio } from "./audio";
 import { tenWordsLanguages } from "@shared/tenWords";
 import topLanguages from "../../data/topLanguages";
-
-describe("10words pauses", () => {
-  it("inserts 600ms silence between words and one second before sentences", () => {
-    const words = Array.from({ length: 10 }, (_, i) => Buffer.from([i + 1, 0]));
-    const sentences = Buffer.from([11, 0]);
-    const audio = joinLessonAudio(words, sentences);
-    const pause = SAMPLE_RATE * 2 * WORD_PAUSE_MS / 1000;
-    const sectionPause = SAMPLE_RATE * 2 * SECTION_PAUSE_MS / 1000;
-    expect(audio.length).toBe(44 + 22 + 9 * pause + sectionPause);
-    let offset = 44;
-    words.forEach((word, index) => {
-      expect(audio.subarray(offset, offset + 2)).toEqual(word);
-      offset += 2;
-      const gap = index === 9 ? sectionPause : pause;
-      expect(audio.subarray(offset, offset + gap)).toEqual(Buffer.alloc(gap));
-      offset += gap;
-    });
-    expect(audio.subarray(offset)).toEqual(sentences);
-    expect(isPausedLessonAudio(audio)).toBe(true);
-    expect(audio.readUInt32LE(24)).toBe(24000);
-    expect(audio.readUInt16LE(22)).toBe(1);
-    expect(audio.readUInt16LE(34)).toBe(16);
-  });
-  it("rejects ordinary WAV audio without word pauses", () => {
-    expect(isPausedLessonAudio(pcmWave(Buffer.from([1, 0, 2, 0])))).toBe(false);
-  });
-  it("does not count leading/trailing padding as pauses between words", () => {
-    const padding = Buffer.alloc(SAMPLE_RATE * 2);
-    expect(isPausedLessonAudio(pcmWave(Buffer.concat([padding, Buffer.from([1, 0]), padding])))).toBe(false);
-    expect(isPausedLessonAudio(pcmWave(Buffer.alloc(SAMPLE_RATE * 30)))).toBe(false);
-  });
-  it("rejects shorter gaps, missing section pauses and invalid PCM formats", () => {
-    const words = Array(10).fill(Buffer.from([1, 0]));
-    const correct = joinLessonAudio(words, Buffer.from([2, 0]));
-    const pause = SAMPLE_RATE * 2 * WORD_PAUSE_MS / 1000;
-    const shortGap = pcmWave(Buffer.concat([correct.subarray(44, 46), correct.subarray(48)]));
-    expect(isPausedLessonAudio(shortGap)).toBe(false);
-    const noSectionGap = pcmWave(Buffer.concat([...words.flatMap(word => [word, Buffer.alloc(pause)]), Buffer.from([2, 0])]));
-    expect(isPausedLessonAudio(noSectionGap)).toBe(false);
-    const invalidFormat = Buffer.from(correct);
-    invalidFormat.writeUInt32LE(48000, 24);
-    expect(isPausedLessonAudio(invalidFormat)).toBe(false);
-  });
-  it("rejects truncated, empty and incomplete recordings", () => {
-    expect(isPausedLessonAudio(Buffer.from("old mp3"))).toBe(false);
-    expect(isPausedLessonAudio(pcmWave(Buffer.from([1, 0])).subarray(0, 44))).toBe(false);
-    expect(() => pcmWave(Buffer.from([1]))).toThrow();
-    expect(() => joinLessonAudio([Buffer.from([1, 0])], Buffer.from([1, 0]))).toThrow();
-  });
+it("recognizes MP3 and rejects WAV or empty audio", () => {
+  expect(isMp3Audio(Buffer.from("ID3saved-mp3"))).toBe(true);
+  expect(isMp3Audio(Buffer.from([0xff, 0xfb, 0x90]))).toBe(true);
+  expect(isMp3Audio(Buffer.from("RIFFold-wave"))).toBe(false);
+  expect(isMp3Audio(Buffer.alloc(0))).toBe(false);
 });
 
 describe("10words language choices", () => {
