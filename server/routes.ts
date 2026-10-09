@@ -48,7 +48,7 @@ import {
   generateUniversalCache, 
   healthCheck 
 } from "./api/lessonAudio";
-import Stripe from "stripe";
+import { stripe, getSubscriptionClientSecret } from "./services/stripeClient";
 import { db } from "./db";
 import { eq, and, or, sql, ilike, desc, isNull } from "drizzle-orm";
 import { 
@@ -60,13 +60,6 @@ import {
   insertCommunityMessageSchema, inviteBrains, brainMemberships, brainInvitations, inviteBrainMemories, brainPayments,
   insertInviteBrainSchema, insertBrainMembershipSchema, insertBrainInvitationSchema, insertInviteBrainMemorySchema
 } from "@shared/schema";
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
-});
 
 // Configure multer for file uploads
 const upload = multer({
@@ -2632,7 +2625,7 @@ Try being more specific about the type of service or location you're looking for
         const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
         res.json({
           subscriptionId: subscription.id,
-          clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+          clientSecret: getSubscriptionClientSecret(subscription),
         });
         return;
       }
@@ -2671,7 +2664,7 @@ Try being more specific about the type of service or location you're looking for
   
       res.json({
         subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        clientSecret: getSubscriptionClientSecret(subscription),
       });
     } catch (error: any) {
       return res.status(400).json({ error: { message: error.message } });

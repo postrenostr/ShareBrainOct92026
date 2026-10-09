@@ -62,6 +62,7 @@ A PostgreSQL database is used for persistent storage of:
 - **Design System**: Consistent black and white theme (`#000000` and `#ffffff`) applied across the entire application for a unified UI/UX.
 
 ## External Dependencies
+- **@replit/connectors-sdk**: Authenticated access to the connected Stripe account.
 - **@neondatabase/serverless**: PostgreSQL database connectivity.
 - **drizzle-orm**: Type-safe ORM for database operations.
 - **@tanstack/react-query**: For server state management.
@@ -77,3 +78,14 @@ A PostgreSQL database is used for persistent storage of:
 - **esbuild**: For production bundling.
 - **tsx**: For TypeScript execution in development.
 - **drizzle-kit**: For database schema management and migrations.
+
+## Running this import on Replit
+
+- Run the existing `Start application` workflow (`npm run dev`). Express serves the React/Vite app on `0.0.0.0:5000`, with proxied hosts allowed.
+- Development uses a fresh PostgreSQL database, not a copy of the original ShareBrain production data. Its tables were initialized from `shared/schema.ts` using `npm run db:push`.
+- `generate-agents-batch.sql` was imported once and contains four starter music tutor templates. Do not rerun it without checking for duplicates.
+- The old SQL migrations do not cover the full current schema; do not replay them on this initialized database.
+- Required Secrets: `OPENAI_API_KEY`, `TOGETHER_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET`, and `SESSION_SECRET`. The database connection is runtime-managed.
+- Required configuration: `GOOGLE_CLIENT_ID`, `GOOGLE_CALLBACK_URL`, and `VITE_STRIPE_PUBLIC_KEY`. Register the callback URL (ending in `/api/auth/google/callback`) as an authorized redirect URI in the Google OAuth application.
+- Stripe server requests use the attached Stripe connection; no `STRIPE_SECRET_KEY` is needed. The browser publishable key must belong to that same account and mode.
+- For schema changes on the development database, use `npm run db:push`. Build with `npm run build`; start a built app with `npm run start`.

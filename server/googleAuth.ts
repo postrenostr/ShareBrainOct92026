@@ -59,7 +59,7 @@ export async function setupAuth(app: Express) {
     process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
   const callbackURL = `${callbackBase.replace(/\/$/, "")}/api/auth/google/callback`;
 
-  const actualCallbackURL = process.env.GOOGLE_CALLBACK_URL || "https://sharebrain-uuxak.ondigitalocean.app/api/auth/google/callback";
+  const actualCallbackURL = process.env.GOOGLE_CALLBACK_URL || callbackURL;
 
   // Debug logging - remove after fixing
   console.log("=== GOOGLE AUTH DEBUG ===");
