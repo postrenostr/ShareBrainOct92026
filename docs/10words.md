@@ -38,7 +38,26 @@ OpenAI's TTS model detects pronunciation from the native text. The catalog inclu
 
 ## API and validation
 
-All endpoints accept either an existing signed-in browser session or the dedicated integration key in an `Authorization: Bearer` header:
+### Individual-key verification
+
+Use **10words → Manage API client keys** to create a key for each integrating app. These credentials are separate from general API Portal keys, which cannot authenticate 10words requests. Normal signed-in lessons do not require a key.
+
+Run `npm test` and `npm run build` for the regular offline checks and production build. Two additional checks are explicitly opt-in:
+
+```sh
+npm run test:10words:db
+npm run test:10words:browser
+```
+
+The database suite uses development credentials and a disposable, uniquely named schema. It applies the real client-table migration to isolated fixtures, checks concurrent quotas, owner isolation, rotation, revocation, permissions, session access, and HTTPS proxy-origin validation, then removes its fixtures. It checks that existing lesson/audio records remain unchanged and never calls AI providers. Do not target production credentials.
+
+The browser suite renders the real key-management component against intercepted API fixtures, with no application authentication bypass. It checks issuance, one-time display, rotation, revocation, and failure handling at a phone-sized viewport. It uses Replit's supplied Chromium when available; elsewhere, provide `PUPPETEER_EXECUTABLE_PATH` or install the browser expected by Puppeteer. This is not verification of a real signed-in production session.
+
+The regular test setup intentionally supplies dummy credentials. The opt-in database configuration excludes that setup so it can test the actual development database safely. The published-process guard uses `REPLIT_DEPLOYMENT=1`, not the workspace's potentially misleading `REPLIT_ENVIRONMENT` label.
+
+Read-only production checks during this verification found the lesson table present but the new client-key table absent. The development migration succeeded; production still needs the new schema through the approved managed publishing process. Preserve production data—do not replace it with development data. No production keys were issued and no production DDL or paid audio refresh was performed.
+
+Lesson endpoints accept either an existing signed-in browser session or an individual 10words client key in an `Authorization: Bearer` header:
 
 - `GET /api/10words/languages` — language catalog and lesson count.
 - `POST /api/10words/:language/lesson` with `{"command":"Lesson 1"}` — return or create the fixed lesson.
