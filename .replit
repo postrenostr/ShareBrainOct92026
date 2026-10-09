@@ -37,3 +37,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_database==1.0.0", "javascript_anthropic==1.0.0", "javascript_openai==1.0.0", "javascript_log_in_with_replit==1.0.0", "javascript_websocket==1.0.0"]
+
+[userenv]
+
+[userenv.development]
+GOOGLE_CALLBACK_URL = "https://a668e9cd-9604-4122-afde-12967ff56c7d-00-iwk9b0y80yyx.kirk.replit.dev/api/auth/google/callback"
