@@ -1354,3 +1354,22 @@ export const tenWordsApiClients = pgTable("ten_words_api_clients", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+// Explicit HD maintenance only: never initialized or processed during startup.
+export const tenWordsHdUpgradeJobs = pgTable("ten_words_hd_upgrade_jobs", {
+  id: text("id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tenWordsHdUpgradeItems = pgTable("ten_words_hd_upgrade_items", {
+  jobId: text("job_id").notNull().references(() => tenWordsHdUpgradeJobs.id),
+  language: varchar("language", { length: 10 }).notNull(),
+  lessonNumber: integer("lesson_number").notNull(),
+  textHash: text("text_hash").notNull(),
+  audioHash: text("audio_hash"),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  message: text("message"),
+  preparedAudio: text("prepared_audio"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [primaryKey({ columns: [table.jobId, table.language, table.lessonNumber] })]);

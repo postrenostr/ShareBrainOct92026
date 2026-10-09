@@ -54,6 +54,9 @@ import { createTenWordsKeysRouter } from "./routes/tenWordsKeys";
 import { TenWordsApiKeys } from "./services/tenWords/apiKeys";
 import { createTenWordsRouter } from "./routes/tenWords";
 import { tenWordsService } from "./services/tenWords";
+import { createTenWordsHdUpgradeRouter } from "./routes/tenWordsHdUpgrade";
+import { TenWordsHdUpgradeJob } from "./services/tenWords/hdUpgradeJob";
+import { createTenWordsGenerator } from "./services/tenWords/generator";
 import { db, pool } from "./db";
 import { eq, and, or, sql, ilike, desc, isNull } from "drizzle-orm";
 import { 
@@ -469,6 +472,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Google Authentication
   await setupAuth(app);
   const tenWordsClients = new TenWordsApiKeys(pool);
+  const hdUpgrade = new TenWordsHdUpgradeJob(pool, createTenWordsGenerator(() => new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY, timeout: 60000, maxRetries: 0,
+  })), process.env.REPLIT_DEPLOYMENT === "1" ? "production" : "development");
+  app.use("/api/10words/hd-upgrade", createTenWordsHdUpgradeRouter(hdUpgrade, isAuthenticated));
   app.use("/api/10words/clients", createTenWordsKeysRouter(tenWordsClients, isAuthenticated));
   app.use("/api/10words", createTenWordsRouter(tenWordsService, isAuthenticated, { clients: tenWordsClients }));
 

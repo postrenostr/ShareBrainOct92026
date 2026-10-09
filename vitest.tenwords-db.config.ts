@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: { alias: { "@shared": path.resolve("shared") } },
   test: {
     environment: "node",
-    include: ["server/services/tenWords/apiKeys.db.test.ts"],
+    include: ["server/services/tenWords/apiKeys.db.test.ts", "server/services/tenWords/hdUpgradeJob.db.test.ts"],
     testTimeout: 30000,
     hookTimeout: 30000,
   },

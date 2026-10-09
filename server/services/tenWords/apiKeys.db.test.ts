@@ -10,7 +10,6 @@ import { TenWordsApiKeys } from "./apiKeys";
 import { createTenWordsKeysRouter } from "../../routes/tenWordsKeys";
 import { createTenWordsRouter } from "../../routes/tenWords";
 import type { TenWordsService } from "./service";
-import { joinLessonAudio } from "./audio";
 
 describe.skipIf(process.env.TEN_WORDS_DB_TESTS !== "1")("real PostgreSQL 10words keys", () => {
   const schema = `tw_key_test_${randomUUID().replaceAll("-", "")}`;
@@ -103,7 +102,7 @@ describe.skipIf(process.env.TEN_WORDS_DB_TESTS !== "1")("real PostgreSQL 10words
     const content = { language: "es", lessonNumber: 1, words: Array(10).fill("Hola"), sentences: Array(10).fill("Hola amigo.") };
     const service = {
       getLesson: async () => content,
-      getAudio: async () => joinLessonAudio(Array.from({ length: 10 }, () => Buffer.from([1, 0])), Buffer.from([2, 0])),
+      getAudio: async () => Buffer.from("ID3fixture-audio"),
     } as unknown as TenWordsService;
     app.use("/api/10words/clients", createTenWordsKeysRouter(clients, session));
     app.use("/api/10words", createTenWordsRouter(service, session, { clients }));
@@ -117,7 +116,7 @@ describe.skipIf(process.env.TEN_WORDS_DB_TESTS !== "1")("real PostgreSQL 10words
     await request(app).get("/api/10words/languages").set("Authorization", header).expect(200);
     await request(app).post("/api/10words/es/lesson").set("Authorization", header).send({ command: "Lesson 1" }).expect(200);
     const audio = await request(app).post("/api/10words/es/lessons/1/audio").set("Authorization", header).expect(200);
-    expect(audio.headers["content-type"]).toContain("audio/wav");
+    expect(audio.headers["content-type"]).toContain("audio/mpeg");
     await request(app).get("/api/10words/clients").set("Authorization", header).expect(403);
     await request(app).get("/api/paid").set("Authorization", header).expect(401);
     await request(app).post("/api/10words/es/lesson").set("X-Test-Owner", owner).send({ command: "Lesson 1" }).expect(200);
