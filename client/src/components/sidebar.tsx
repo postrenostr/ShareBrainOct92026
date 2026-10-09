@@ -155,6 +155,11 @@ export default function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <Link href={getPath("/10words")} onClick={onToggle}
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 font-medium transition-colors ${isActive("/10words") ? "bg-muted text-white" : "text-white hover:bg-muted"}`}>
+          <BookOpen className="h-5 w-5" aria-hidden="true" />
+          <span>10words</span>
+        </Link>
         {/* More Button */}
         <div className="pt-2 border-t border-border mt-4">
           <button

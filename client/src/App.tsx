@@ -68,6 +68,7 @@ import PublicBrainChat from "@/pages/public-brain-chat";
 import VocabularyCacheAdmin from "@/pages/vocabulary-cache-admin";
 import CreationAgents from "@/pages/CreationAgents";
 import AiSays from "@/pages/aisays";
+import TenWords from "@/pages/ten-words";
 import Sidebar from "@/components/sidebar";
 import MobileHeader from "@/components/mobile-header";
 import { useState } from "react";
@@ -126,6 +127,10 @@ function Router() {
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col pt-16 lg:pt-0">
                   <Switch>
+                    <Route path="/10words" component={TenWords} />
+                    <Route path="/10words/:language" component={TenWords} />
+                    <Route path="/test/10words" component={TenWords} />
+                    <Route path="/test/10words/:language" component={TenWords} />
                     {/* Test Environment Routes */}
                     <Route path="/test" component={BrainDirectory} />
                     <Route path="/test/agents" component={Agents} />

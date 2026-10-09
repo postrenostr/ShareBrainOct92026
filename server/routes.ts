@@ -50,6 +50,8 @@ import {
   healthCheck 
 } from "./api/lessonAudio";
 import { stripe, getSubscriptionClientSecret } from "./services/stripeClient";
+import { createTenWordsRouter } from "./routes/tenWords";
+import { tenWordsService } from "./services/tenWords";
 import { db } from "./db";
 import { eq, and, or, sql, ilike, desc, isNull } from "drizzle-orm";
 import { 
@@ -464,6 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup Google Authentication
   await setupAuth(app);
+  app.use("/api/10words", createTenWordsRouter(tenWordsService, isAuthenticated));
 
   // Test environment routing - handle all /test/* routes to serve React app
   app.get('/test', (req, res, next) => {
@@ -7322,7 +7325,7 @@ Be supportive of their friendship and help maintain connection by recalling shar
           slug.startsWith('api') || 
           slug.startsWith('assets') || 
           slug.startsWith('static') ||
-          ['auth', 'login', 'logout', 'agents', 'contacts', 'conversations', 'settings', 'dashboard', 'create-agent', 'agent-builder', 'profile-settings', 'create-personal-agent', 'create-business-agent', 'business-listing', 'webhooks', 'websites', 'unified-chat', 'chat', 'agent', 'easy-agents', 'directory', 'advertisements', 'ab-testing-dashboard', 'master-agent', 'library', 'testing', 'api-portal', 'tts-test', 'agent-creation-manual', 'trial-signup', 'trial-success', 'choose-handle', 'checkout', 'subscribe', 'git-manager', 'test', 'deploy-test', 'deploy-production', 'admin', 'auto-login-sakae'].includes(slug)) {
+          ['10words', 'auth', 'login', 'logout', 'agents', 'contacts', 'conversations', 'settings', 'dashboard', 'create-agent', 'agent-builder', 'profile-settings', 'create-personal-agent', 'create-business-agent', 'business-listing', 'webhooks', 'websites', 'unified-chat', 'chat', 'agent', 'easy-agents', 'directory', 'advertisements', 'ab-testing-dashboard', 'master-agent', 'library', 'testing', 'api-portal', 'tts-test', 'agent-creation-manual', 'trial-signup', 'trial-success', 'choose-handle', 'checkout', 'subscribe', 'git-manager', 'test', 'deploy-test', 'deploy-production', 'admin', 'auto-login-sakae'].includes(slug)) {
         return next(); // Let it fall through to the main app routing
       }
       
