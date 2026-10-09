@@ -9,6 +9,12 @@ Use the original direct Stripe SDK method with the user's own secret key in Secr
 
 **How to apply:** Preserve direct Stripe authentication using STRIPE_SECRET_KEY and ensure the browser key matches its account and mode. Check secret existence before requesting credentials, never request values in chat, and do not disconnect managed integrations automatically.
 
+A successful server-side Stripe authentication check does not verify the browser's payment configuration.
+
+**Why:** During the direct-key setup, server authentication worked in live mode while the published browser bundle still contained a test-mode publishable key.
+
+**How to apply:** Verify the served browser bundle's key mode separately without exposing key values. A browser key change requires rebuilding and republishing; checking secret existence or restarting the server alone is insufficient.
+
 The previously attached managed Stripe connection triggered “Connect a live Stripe account before publishing” even though the app ran successfully. A connector's added status does not establish a live production association.
 
 Do not treat an attached managed integration entry as proof that publishing is still blocked, or recommend disconnecting it solely because it remains listed.
