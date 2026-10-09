@@ -9,7 +9,7 @@ import { CheckCircle, CreditCard, Shield, Zap, Calendar, XCircle } from "lucide-
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { completeTrialSetup, getStripeKeyMode, trialErrorMessage } from "@/lib/trialSetup";
+import { confirmTrialPayment, getStripeKeyMode, trialErrorMessage } from "@/lib/trialSetup";
 import { LogoutButton } from "@/components/LogoutButton";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
@@ -38,17 +38,7 @@ const TrialSignupForm = () => {
     setIsProcessing(true);
 
     try {
-      const result = await stripe.confirmSetup({
-        elements,
-        confirmParams: {
-          return_url: window.location.origin + "/trial-success",
-        },
-        redirect: "if_required",
-      });
-      if (result.error) throw new Error(result.error.message || "Your card could not be saved.");
-      if (!result.setupIntent) throw new Error("Payment method confirmation has not completed.");
-
-      await completeTrialSetup(result.setupIntent.id);
+      await confirmTrialPayment(stripe, elements, window.location.origin + "/trial-success");
       toast({
         title: "Trial Started!",
         description: "Your payment method is saved and your 14-day trial is active.",

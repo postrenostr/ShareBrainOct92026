@@ -4,7 +4,7 @@ import { CheckCircle, ArrowRight, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
-import { completeTrialSetup, hasActiveTrial, refreshTrialAccess, trialErrorMessage } from "@/lib/trialSetup";
+import { completeTrialSetup, hasActiveTrial, refreshTrialAccess, trialErrorMessage, trialReturnPath } from "@/lib/trialSetup";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function TrialSuccess() {
@@ -20,6 +20,8 @@ export default function TrialSuccess() {
       try {
         const parameters = new URLSearchParams(window.location.search);
         const setupIntentId = parameters.get("setup_intent");
+        // The ID is enough for server verification; discard the secret even on failure.
+        window.history.replaceState(window.history.state, "", trialReturnPath(window.location));
         if (setupIntentId) {
           // Handles cards that require Stripe to redirect for authentication.
           await completeTrialSetup(setupIntentId);
@@ -30,12 +32,7 @@ export default function TrialSuccess() {
           }
           await refreshTrialAccess();
         }
-        // Never retain Stripe's client secret in the return-page URL.
-        for (const key of ["setup_intent", "setup_intent_client_secret", "redirect_status"]) {
-          parameters.delete(key);
-        }
-        const query = parameters.toString();
-        window.history.replaceState(window.history.state, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+        window.history.replaceState(window.history.state, "", trialReturnPath(window.location, true));
         if (!cancelled) setState("active");
       } catch (error) {
         if (!cancelled) {

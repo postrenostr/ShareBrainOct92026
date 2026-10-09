@@ -13,6 +13,6 @@ export default defineConfig({
     globals: true,
     setupFiles: './vitest.setup.ts',
     tsconfig: 'tsconfig.vitest.json',
-    include: ['server/**/*.test.ts']
+    include: ['server/**/*.test.ts', 'client/src/**/*.test.ts']
   }
 })
