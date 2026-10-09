@@ -9,6 +9,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test": "vitest run",
+    "test:10words:db": "TEN_WORDS_DB_TESTS=1 vitest run --config vitest.tenwords-db.config.ts",
+    "test:10words:browser": "TEN_WORDS_BROWSER_TESTS=1 vitest run client/src/components/ten-words-keys.browser.test.ts",
     "db:push": "drizzle-kit push",
     "db:10words": "tsx server/scripts/migrateTenWords.ts",
     "seed:languages": "tsx server/scripts/bulkCreateLanguageTutors.ts",

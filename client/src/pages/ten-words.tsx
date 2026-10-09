@@ -122,6 +122,7 @@ export default function TenWords() {
       <h1 className="text-3xl font-bold">10words language agents</h1>
       <p className="mt-3 text-muted-foreground">Ten words. Ten sentences. Hear only the language you’re learning.</p>
       <p className="mt-2 text-sm text-muted-foreground">Fifty saved lessons, from simple everyday words to more challenging ideas. Choose your language.</p>
+      <a href="#tenwords-api-client-keys" className="mt-3 inline-block text-sm underline">Manage API client keys</a>
       {params?.language && <p role="alert" className="mt-4">That language is not available. Choose one below.</p>}
       <div className="mt-6 max-w-md">
         <label htmlFor="language-search" className="sr-only">Search languages</label>

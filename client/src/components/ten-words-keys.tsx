@@ -30,9 +30,10 @@ export default function TenWordsKeys() {
     } catch (err) { setError(err instanceof Error ? err.message : "Client key could not be updated."); }
     finally { setBusy(false); }
   }
-  return <section className="mt-10 rounded-xl border p-6" aria-label="10words API clients">
+  return <section id="tenwords-api-client-keys" className="mt-10 rounded-xl border p-6" aria-label="10words API clients">
     <h2 className="text-xl font-semibold">API client keys</h2>
     <p className="mt-2 text-sm text-muted-foreground">Create a separate key for each app. Store it securely on that app’s backend.</p>
+    <p className="mt-2 text-sm text-muted-foreground">These keys work only with 10words. Keys from the general API Portal do not work here. Your normal signed-in lesson access does not need a key.</p>
     <form className="mt-4 space-y-3" onSubmit={event => { event.preventDefault(); void change("", { name, scopes, rateLimit: Number(limit) }); }}>
       <label className="block">Client name<Input required maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
       <fieldset><legend>Permissions</legend>{permissions.map(scope => <label key={scope} className="mr-4 inline-flex gap-2">
