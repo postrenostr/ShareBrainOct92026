@@ -38,7 +38,7 @@ OpenAI's TTS model detects pronunciation from the native text. The catalog inclu
 
 ## API and validation
 
-All new endpoints require the existing authentication middleware:
+All endpoints accept either an existing signed-in browser session or the dedicated integration key in an `Authorization: Bearer` header:
 
 - `GET /api/10words/languages` — language catalog and lesson count.
 - `POST /api/10words/:language/lesson` with `{"command":"Lesson 1"}` — return or create the fixed lesson.
@@ -68,3 +68,30 @@ Test only this lesson: first-time text generation and narration incur OpenAI cha
 Development verification on 2026-10-09 confirmed the real managed database table, a successful OpenAI Spanish Lesson 1 generation, and saved MP3 narration. Repeated requests and a fresh service reused identical saved text/audio with no additional generation. The MP3 contains decodable audio; this does not establish pronunciation quality or real signed-in browser playback. The production table still needs the user-approved Publish step. Recheck live schema and authenticated playback after publishing rather than treating a development smoke test as production proof.
 
 Known limits outside this setup: no generation quota, no cross-worker generation lock (database uniqueness preserves the saved winner but not the cost of competing generations), and a curriculum distinct from the existing tutors. Audio playback failure recovery also needs separate attention.
+
+## Connecting another program or voice agent
+
+Configure a dedicated `TEN_WORDS_API_KEY` secret on the ShareBrain server and the same value on the ReplitJevBrowser backend. Use 32–256 non-whitespace characters; a securely generated 32-byte hex token is suitable. Generate it in your secure deployment tooling and store it in environment Secrets. Never put the key in browser JavaScript, URLs, source control, or chat. No database migration is needed for this authentication change.
+
+This integration key grants access only to the 10words endpoints. Existing general agent API keys are not accepted here. If `TEN_WORDS_API_KEY` is unset, server-to-server key access is disabled and normal browser-session access continues to work. Rotate or revoke the key by updating or removing the configured value on the deployment, then restarting/applying its runtime configuration. The code reads the active environment value per request.
+
+Example server-to-server requests (environment values are supplied securely by your deployment):
+
+```sh
+curl --fail --silent --show-error "$SHAREBRAIN_BASE_URL/api/10words/languages" \
+  -H "Authorization: Bearer $TEN_WORDS_API_KEY"
+
+curl --fail --silent --show-error "$SHAREBRAIN_BASE_URL/api/10words/es/lesson" \
+  -H "Authorization: Bearer $TEN_WORDS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"Lesson 1"}'
+
+curl --fail --silent --show-error -X POST "$SHAREBRAIN_BASE_URL/api/10words/es/lessons/1/audio" \
+  -H "Authorization: Bearer $TEN_WORDS_API_KEY" -o lesson.wav
+```
+
+The lesson JSON contains `language`, `lessonNumber`, `words` (ten strings), and `sentences` (ten strings). Audio is binary WAV, not a JSON URL or an MP3. Map “Spanish lesson one” to `es` / `Lesson 1`, and “French lesson ten” to `fr` / `Lesson 10`. Discover language names and codes from `/languages` rather than maintaining a separate list. Requests for saved lessons reuse their fixed database content.
+
+ReplitJevBrowser should make these calls from its backend and deliver the returned audio through its own authenticated endpoint. Pause recognition while audio plays, so the lesson does not become another command. The browser needs no ShareBrain API key, cross-site cookies or direct cross-origin requests. Use HTTPS in deployment.
+
+Invalid, missing or revoked key credentials return 401. Supplied invalid Authorization headers do not fall back to a session. Key-authenticated calls share a 120-request-per-minute limit per server process; 429 includes `Retry-After`. Browser-session requests retain their existing behavior. API-key values are never logged by this middleware. Multiple server instances enforce independent limits; this is not a distributed quota. Generation and database errors still return 503 and do not save fallback lesson text.

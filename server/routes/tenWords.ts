@@ -1,11 +1,12 @@
 import { Router, type RequestHandler } from "express";
+import { createTenWordsAuth, type TenWordsApiAuthOptions } from "../middleware/tenWordsApiAuth";
 import { z } from "zod";
 import { parseLessonCommand, tenWordsLanguages, TEN_WORDS_LESSON_COUNT } from "@shared/tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
 
-export function createTenWordsRouter(service: TenWordsService, authenticate: RequestHandler) {
+export function createTenWordsRouter(service: TenWordsService, authenticate: RequestHandler, apiAuthOptions?: TenWordsApiAuthOptions) {
   const router = Router();
-  router.use(authenticate);
+  router.use(createTenWordsAuth(authenticate, apiAuthOptions));
   router.get("/languages", (_req, res) => res.json({ languages: tenWordsLanguages, lessonCount: TEN_WORDS_LESSON_COUNT }));
   // First access can create a lesson; use POST to avoid generation by prefetchers.
   router.post("/:language/lesson", async (req, res) => {

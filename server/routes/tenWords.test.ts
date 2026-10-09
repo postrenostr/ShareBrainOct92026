@@ -5,7 +5,7 @@ import { pcmWave } from "../services/tenWords/audio";
 import { createTenWordsRouter } from "./tenWords";
 import { TenWordsError, type TenWordsService } from "../services/tenWords/service";
 
-function setup(authenticated = true) {
+function setup(authenticated = true, apiKey?: string) {
   const service = {
     getLesson: vi.fn(async () => ({ language: "es", lessonNumber: 1, words: ["Hola"], sentences: ["Hola."] })),
     getAudio: vi.fn(async () => pcmWave(Buffer.from([1, 0]))),
@@ -13,7 +13,7 @@ function setup(authenticated = true) {
   const app = express();
   app.use(express.json());
   app.use("/api/10words", createTenWordsRouter(service as unknown as TenWordsService,
-    (_req, res, next) => { if (authenticated) next(); else res.status(401).json({ message: "Unauthorized" }); }));
+    (_req, res, next) => { if (authenticated) next(); else res.status(401).json({ message: "Unauthorized" }); }, { getApiKey: () => apiKey }));
   return { app, service };
 }
 
@@ -25,6 +25,18 @@ describe("10words API", () => {
     await request(app).post("/api/10words/es/lessons/1/audio").expect(401);
     expect(service.getLesson).not.toHaveBeenCalled();
     expect(service.getAudio).not.toHaveBeenCalled();
+  });
+  it("allows API-key access to catalog, lesson JSON and WAV audio without a browser login", async () => {
+    const key = "test_integration_" + "a".repeat(48);
+    const { app, service } = setup(false, key);
+    await request(app).get("/api/10words/languages").set("Authorization", `Bearer ${key}`).expect(200);
+    const lesson = await request(app).post("/api/10words/fr/lesson").set("Authorization", `Bearer ${key}`)
+      .send({ command: "Lesson 10" }).expect(200);
+    expect(lesson.body.words).toEqual(["Hola"]);
+    expect(service.getLesson).toHaveBeenCalledWith("fr", 10);
+    await request(app).post("/api/10words/fr/lessons/10/audio").set("Authorization", `Bearer ${key}`)
+      .expect(200).expect("Content-Type", /audio\/wav/);
+    expect(service.getAudio).toHaveBeenCalledWith("fr", 10);
   });
   it("lists the language agents and accepts Lesson 1", async () => {
     const { app, service } = setup();
