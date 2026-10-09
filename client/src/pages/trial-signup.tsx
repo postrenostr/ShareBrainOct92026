@@ -9,7 +9,7 @@ import { CheckCircle, CreditCard, Shield, Zap, Calendar, XCircle } from "lucide-
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { queryClient } from "@/lib/queryClient";
+import { completeTrialSetup, getStripeKeyMode, trialErrorMessage } from "@/lib/trialSetup";
 import { LogoutButton } from "@/components/LogoutButton";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
@@ -25,55 +25,44 @@ const TrialSignupForm = () => {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentReady, setPaymentReady] = useState(false);
+  const [paymentLoadError, setPaymentLoadError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripe || !elements) {
+    if (!stripe || !elements || !paymentReady) {
       return;
     }
 
     setIsProcessing(true);
 
-    const { error } = await stripe.confirmSetup({
-      elements,
-      confirmParams: {
-        return_url: window.location.origin + "/trial-success",
-      },
-    });
+    try {
+      const result = await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + "/trial-success",
+        },
+        redirect: "if_required",
+      });
+      if (result.error) throw new Error(result.error.message || "Your card could not be saved.");
+      if (!result.setupIntent) throw new Error("Payment method confirmation has not completed.");
 
-    if (error) {
+      await completeTrialSetup(result.setupIntent.id);
       toast({
-        title: "Setup Failed",
-        description: error.message,
+        title: "Trial Started!",
+        description: "Your payment method is saved and your 14-day trial is active.",
+      });
+      setLocation("/trial-success");
+    } catch (error) {
+      toast({
+        title: "Trial signup could not finish",
+        description: trialErrorMessage(error),
         variant: "destructive",
       });
-    } else {
-      // Complete trial setup on backend
-      try {
-        await apiRequest("POST", "/api/complete-trial-setup");
-        
-        // Invalidate trial status to refresh authentication state
-        queryClient.invalidateQueries({ queryKey: ['/api/user/trial-status'] });
-        
-        toast({
-          title: "Trial Started!",
-          description: "Welcome to ShareBrain! Your 14-day free trial has begun.",
-        });
-        
-        // Redirect to thank you page
-        setLocation("/trial-success");
-      } catch (error) {
-        console.error("Error completing trial setup:", error);
-        toast({
-          title: "Setup Error",
-          description: "Payment method saved but trial setup failed. Please contact support.",
-          variant: "destructive",
-        });
-      }
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   }
 
   return (
@@ -162,17 +151,29 @@ const TrialSignupForm = () => {
                 <label className="block text-sm font-medium text-white mb-2">
                   Payment Method
                 </label>
-                <PaymentElement />
+                <PaymentElement
+                  onReady={() => setPaymentReady(true)}
+                  onLoadError={({ error }) => {
+                    setPaymentReady(false);
+                    setPaymentLoadError(error.message || "The payment form could not load.");
+                  }}
+                />
               </div>
+              {paymentLoadError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{paymentLoadError}</AlertDescription>
+                </Alert>
+              )}
               
               <Button 
                 type="submit" 
-                disabled={!stripe || isProcessing} 
+                disabled={!stripe || !elements || !paymentReady || !!paymentLoadError || isProcessing}
                 className="w-full"
                 size="lg"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
-                {isProcessing ? 'Starting Trial...' : 'Start Free Trial (No Charge Today)'}
+                {isProcessing ? 'Starting Trial...' : !paymentReady && !paymentLoadError
+                  ? 'Loading payment form...' : 'Start Free Trial (No Charge Today)'}
               </Button>
             </form>
 
@@ -201,17 +202,25 @@ const TrialSignupForm = () => {
 export default function TrialSignup() {
   const [clientSecret, setClientSecret] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [setupError, setSetupError] = useState("");
 
   useEffect(() => {
     // Create setup intent for trial signup
     apiRequest("POST", "/api/create-setup-intent")
       .then((res) => res.json())
       .then((data) => {
+        if (typeof data.clientSecret !== "string" || !data.clientSecret) {
+          throw new Error("Stripe did not return a payment form. Please try again.");
+        }
+        if (typeof data.livemode === "boolean" &&
+          getStripeKeyMode(import.meta.env.VITE_STRIPE_PUBLIC_KEY) !== (data.livemode ? "live" : "test")) {
+          throw new Error("The Stripe public and private keys use different modes. The site owner must configure matching keys and republish.");
+        }
         setClientSecret(data.clientSecret);
         setIsLoading(false);
       })
       .catch((error) => {
-        console.error("Error creating setup intent:", error);
+        setSetupError(trialErrorMessage(error));
         setIsLoading(false);
       });
   }, []);
@@ -229,7 +238,7 @@ export default function TrialSignup() {
       <div className="max-w-2xl mx-auto p-6">
         <Alert className="border-red-200 bg-red-50">
           <AlertDescription>
-            Unable to start trial signup. Please try again or contact support.
+            {setupError || "Unable to start trial signup. Please try again."}
           </AlertDescription>
         </Alert>
       </div>

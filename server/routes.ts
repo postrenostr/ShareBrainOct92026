@@ -27,6 +27,7 @@ import { requireTrialForCustomAgents } from "./middleware/requireTrialForCustomA
 import { requireValidSubscription, requireValidSubscriptionForCustomAgents } from "./middleware/requireValidSubscription";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { getSubscriptionStatus } from "./api/subscription-status";
+import { createCompleteTrialSetupHandler } from "./services/trialSetup";
 import { socialMemoryService } from "./socialMemoryService";
 import { generateAgentLibrary } from "./agentLibraryGenerator";
 import { AgentEnhancementService } from "./agentEnhancementService";
@@ -2546,54 +2547,20 @@ Try being more specific about the type of service or location you're looking for
         }
       });
 
-      res.json({ clientSecret: setupIntent.client_secret });
+      res.json({ clientSecret: setupIntent.client_secret, livemode: setupIntent.livemode });
     } catch (error: any) {
-      res.status(500).json({ 
-        message: "Error creating setup intent: " + error.message 
+      console.error("Unable to prepare Stripe trial signup.", {
+        type: error.type,
+        code: error.code,
+        status: error.statusCode,
       });
+      res.status(500).json({ message: "Unable to prepare trial signup. Please try again." });
     }
   });
 
   // Complete trial setup after successful payment method setup
-  app.post("/api/complete-trial-setup", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Start the trial if not already started
-      if (!user.trialStartDate) {
-        // Calculate trial end date (14 days from now)
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 14);
-        
-        const updatedUser = await storage.updateUser(userId, {
-          trialStartDate: new Date(),
-          trialEndDate: trialEndDate,
-          subscriptionStatus: "trial"
-        });
-        
-        res.json({ 
-          success: true, 
-          message: "Trial started successfully",
-          user: updatedUser 
-        });
-      } else {
-        res.json({ 
-          success: true, 
-          message: "Trial already active",
-          user: user 
-        });
-      }
-    } catch (error: any) {
-      res.status(500).json({ 
-        message: "Error completing trial setup: " + error.message 
-      });
-    }
-  });
+  app.post("/api/complete-trial-setup", isAuthenticated,
+    createCompleteTrialSetupHandler({ storage, stripe }));
 
   // Middleware to check trial status
   const checkTrialStatus = async (req: any, res: any, next: any) => {
