@@ -19,6 +19,8 @@ vi.mock('./storage', async () => {
 })
 
 import { storage } from './storage'
+import { db } from './db'
+import { intelligentMemoryService } from './intelligentMemoryService'
 
 import { registerRoutes } from './routes'
 
@@ -28,11 +30,19 @@ async function setupApp(authenticated = true) {
   const app = express()
   app.use(express.json())
   if (authenticated) {
-    app.use((req, _res, next) => {
-      (req as any).user = { id: 'user-1', claims: { sub: 'user-1' } }
-      next()
+    await storage.upsertUser({
+      id: 'user-1',
+      email: 'fixture@example.invalid',
+      subscriptionStatus: 'active',
     })
   }
+  app.use((req, _res, next) => {
+    (req as any).isAuthenticated = () => authenticated
+    if (authenticated) {
+      (req as any).user = { id: 'user-1', claims: { sub: 'user-1' } }
+    }
+    next()
+  })
   await registerRoutes(app)
   return app
 }
@@ -50,9 +60,18 @@ describe('POST /api/agents', () => {
 
     expect(createRes.body.userId).toBe('user-1')
 
-    const listRes = await request(app).get('/api/agents').expect(200)
-    const ids = listRes.body.map((a: any) => a.id)
-    expect(ids).toContain(createRes.body.id)
+    // This endpoint reads projected rows directly, not through MemStorage.
+    const query = {
+      from: vi.fn(), leftJoin: vi.fn(), where: vi.fn(),
+      orderBy: vi.fn().mockResolvedValueOnce([createRes.body]).mockResolvedValueOnce([]),
+    }
+    for (const method of [query.from, query.leftJoin, query.where]) method.mockReturnValue(query)
+    const select = vi.spyOn(db, 'select').mockReturnValue(query as any)
+    try {
+      const listRes = await request(app).get('/api/agents').expect(200)
+      const ids = listRes.body.map((a: any) => a.id)
+      expect(ids).toContain(createRes.body.id)
+    } finally { select.mockRestore() }
   })
 
   it('stores isPersonal flag when creating and updating', async () => {
@@ -86,6 +105,29 @@ describe('GET /api/agents', () => {
 })
 
 describe('POST /api/chat', () => {
+  it('allows authenticated free chat while keeping paid agent creation blocked', async () => {
+    const agent = await request(app)
+      .post('/api/agents')
+      .send({
+        name: 'Free chat fixture', description: 'fixture', category: 'General',
+        model: 'gpt-4o', isPersonal: true, systemPrompt: 'Fixture instructions.',
+      })
+      .expect(201)
+    await storage.updateUser('user-1', {
+      subscriptionStatus: 'none', stripeCustomerId: null,
+      trialStartDate: null, trialEndDate: null,
+    })
+    const chat = await request(app)
+      .post('/api/chat')
+      .send({ agentId: agent.body.id, message: 'instructions' })
+      .expect(200)
+    expect(chat.body.content).toBe('Fixture instructions.')
+    await request(app)
+      .post('/api/agents')
+      .send({ name: 'Paid fixture', description: 'fixture', category: 'General', model: 'gpt-4o', isPersonal: false })
+      .expect(403)
+  })
+
   it('returns system prompt when message is "instructions"', async () => {
     const createRes = await request(app)
       .post('/api/agents')
@@ -103,8 +145,8 @@ describe('POST /api/chat', () => {
       .send({ agentId: createRes.body.id, message: 'instructions' })
       .expect(200)
 
-    expect(chatRes.body.message.role).toBe('assistant')
-    expect(chatRes.body.message.content).toBe('Here are the instructions.')
+    expect(chatRes.body.role).toBe('assistant')
+    expect(chatRes.body.content).toBe('Here are the instructions.')
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -123,8 +165,13 @@ describe('POST /api/chat error handling', () => {
       .send({ name: 'Personal', description: 'd', category: 'General', model: 'gpt-4o', isPersonal: true })
       .expect(201)
 
-    const spy = vi
-      .spyOn(storage, 'createPersonalMemory')
+    const analysis = vi.spyOn(intelligentMemoryService, 'analyzeForMemory')
+      .mockResolvedValue({
+        isMemoryRequest: true,
+        classification: { category: 'personal', key: 'name', value: 'Fixture' },
+        originalStatement: 'Fixture statement',
+      } as any)
+    const spy = vi.spyOn(intelligentMemoryService, 'storeMemory')
       .mockRejectedValue({ code: '42P01' })
 
     const res = await request(app)
@@ -135,6 +182,7 @@ describe('POST /api/chat error handling', () => {
     expect(res.body).toEqual({ message: 'Database schema missing: run migrations' })
 
     spy.mockRestore()
+    analysis.mockRestore()
   })
 })
 
