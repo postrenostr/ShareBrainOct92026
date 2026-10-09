@@ -1,3 +1,4 @@
+import TenWordsKeys from "@/components/ten-words-keys";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { BookOpen, Play, Square, Loader2 } from "lucide-react";
@@ -135,6 +136,7 @@ export default function TenWords() {
           </Link>
         ))}
       </div>
+      <TenWordsKeys />
       {!tenWordsLanguages.some(item => `${item.name} ${item.nativeName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && <p role="status" className="mt-6">No languages match your search.</p>}
     </main>
   );
