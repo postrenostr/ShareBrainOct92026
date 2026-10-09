@@ -14,7 +14,7 @@ npm run build
 npm run dev
 ```
 
-`db:10words` uses `DATABASE_URL` and the existing Neon WebSocket PostgreSQL driver. It creates only `ten_words_lessons`; rerunning it preserves existing data. It does not run the repository's general `db:push` or change other schemas. The standalone SQL is `migrations/0003_add_ten_words_lessons.sql`; it is not registered in the older Drizzle migration journal.
+`db:10words` uses `DATABASE_URL` and the existing Neon WebSocket PostgreSQL driver. It creates `ten_words_lessons` and `ten_words_api_clients`; rerunning it preserves existing data. It does not run the repository's general `db:push` or change other schemas. The standalone SQL files are `migrations/0003_add_ten_words_lessons.sql` and `migrations/0004_add_ten_words_api_clients.sql`; they are not registered in the older Drizzle migration journal.
 
 ### Publishing with Replit's managed database
 
@@ -71,29 +71,41 @@ Development verification on 2026-10-09 confirmed the real managed database table
 
 Known limits outside this setup: no generation quota, no cross-worker generation lock (database uniqueness preserves the saved winner but not the cost of competing generations), and a curriculum distinct from the existing tutors. Audio playback failure recovery also needs separate attention.
 
-## Connecting another program or voice agent
+## Client API keys and voice-agent integration
 
-Configure a dedicated `TEN_WORDS_API_KEY` secret on the ShareBrain server and the same value on the ReplitJevBrowser backend. Use 32–256 non-whitespace characters; a securely generated 32-byte hex token is suitable. Generate it in your secure deployment tooling and store it in environment Secrets. Never put the key in browser JavaScript, URLs, source control, or chat. No database migration is needed for this authentication change.
+Run `npm run db:10words` with development’s securely configured `DATABASE_URL` before deploying this update, then follow the managed Publish or external-database migration process described above. It applies the lesson migration plus `0004_add_ten_words_api_clients.sql` idempotently without changing saved lessons. This update replaces the shared `TEN_WORDS_API_KEY`; that environment secret is no longer accepted. Issue a separate client key to each integrating app before switching it over.
 
-This integration key grants access only to the 10words endpoints. Existing general agent API keys are not accepted here. If `TEN_WORDS_API_KEY` is unset, server-to-server key access is disabled and normal browser-session access continues to work. Rotate or revoke the key by updating or removing the configured value on the deployment, then restarting/applying its runtime configuration. The code reads the active environment value per request.
+Open **10words → API client keys** while signed in. Enter the app’s name, choose its permissions, and set its request limit (1–120/minute). Save the generated key immediately in that app’s backend Secrets: it appears only in the creation/rotation response and cannot be retrieved later. ShareBrain stores only its SHA-256 hash and a short identification prefix. Keys contain 256 bits of cryptographic randomness. Never place keys in browser JavaScript, URLs, source control or chat.
 
-Example server-to-server requests (environment values are supplied securely by your deployment):
+Each client has an owner, permissions, persistent accepted-request count, last-use timestamp, and request limit. The dashboard lists only your clients and lets you revoke or rotate each independently. Rotation invalidates the previous key immediately, preserving client usage and quota state. Revocation is permanent; create a new client to restore access. Requests already authorized may finish after rotation/revocation.
+
+Permissions are `languages:read`, `lessons:read`, and `audio:read`, corresponding to the three lesson endpoints below. A lesson/audio request can generate and save missing content, so grant these permissions only to apps you trust to incur generation costs. Valid key requests consume that client's limit before lesson processing (including downstream validation/provider failures). Missing, revoked or incorrect credentials return 401; missing endpoint permission returns 403; a limit returns 429 with `Retry-After: 60`; database/authentication outages fail closed with 503. Invalid supplied Authorization headers never fall back to a browser session.
+
+Limits are atomic database counters shared across server instances, reset at each database UTC minute. Rotation does not reset them. Counters measure accepted authenticated calls, not billing or successful generation. This is a per-client request limit, not a daily spend cap or a global abuse-protection system. Separate clients have independent limits; avoid issuing multiple clients to bypass your intended budget.
+
+Server-to-server examples (supply environment values securely):
 
 ```sh
 curl --fail --silent --show-error "$SHAREBRAIN_BASE_URL/api/10words/languages" \
-  -H "Authorization: Bearer $TEN_WORDS_API_KEY"
+  -H "Authorization: Bearer $TEN_WORDS_CLIENT_KEY"
 
 curl --fail --silent --show-error "$SHAREBRAIN_BASE_URL/api/10words/es/lesson" \
-  -H "Authorization: Bearer $TEN_WORDS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"command":"Lesson 1"}'
+  -H "Authorization: Bearer $TEN_WORDS_CLIENT_KEY" \
+  -H "Content-Type: application/json" -d '{"command":"Lesson 1"}'
 
 curl --fail --silent --show-error -X POST "$SHAREBRAIN_BASE_URL/api/10words/es/lessons/1/audio" \
-  -H "Authorization: Bearer $TEN_WORDS_API_KEY" -o lesson.wav
+  -H "Authorization: Bearer $TEN_WORDS_CLIENT_KEY" -o lesson.wav
 ```
 
 The lesson JSON contains `language`, `lessonNumber`, `words` (ten strings), and `sentences` (ten strings). Audio is binary WAV, not a JSON URL; legacy MP3 fallback is possible when an upgrade is unavailable, so use the response `Content-Type`. Map “Spanish lesson one” to `es` / `Lesson 1`, and “French lesson ten” to `fr` / `Lesson 10`. Discover language names and codes from `/languages` rather than maintaining a separate list. Requests for saved lessons reuse their fixed database content.
 
-ReplitJevBrowser should make these calls from its backend and deliver the returned audio through its own authenticated endpoint. Pause recognition while audio plays, so the lesson does not become another command. The browser needs no ShareBrain API key, cross-site cookies or direct cross-origin requests. Use HTTPS in deployment.
+ReplitJevBrowser should call from its backend and deliver audio through its own authenticated endpoint. Pause recognition while audio plays. Its browser needs no ShareBrain key or cross-origin cookies. Use HTTPS. This change supplies ShareBrain access; the voice-agent integration is a separate change.
 
-Invalid, missing or revoked key credentials return 401. Supplied invalid Authorization headers do not fall back to a session. Key-authenticated calls share a 120-request-per-minute limit per server process; 429 includes `Retry-After`. Browser-session requests retain their existing behavior. API-key values are never logged by this middleware. Multiple server instances enforce independent limits; this is not a distributed quota. Generation and database errors still return 503 and do not save fallback lesson text.
+Management endpoints under `/api/10words/clients` require a signed-in browser session; Bearer keys cannot manage clients. All responses use `Cache-Control: no-store`, and client-management response bodies are excluded from application request logs.
+
+- `GET /` → `{clients: [...]}` with public metadata only, never hashes or full keys.
+- `POST /` with `{name, scopes, rateLimit}` → `{key, client}` (201), key returned once.
+- `POST /:id/rotate` with `{}` → `{key, client}`, replacement key returned once.
+- `POST /:id/revoke` with `{}` → revoked client metadata.
+
+Mutations require JSON and reject foreign browser origins. All operations enforce owner identity; another owner’s IDs return 404 on mutation. Removing a user also removes their client keys.

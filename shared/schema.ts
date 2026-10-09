@@ -1,4 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, real, json, varchar, index, unique, primaryKey } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, real, json, varchar, index, unique, primaryKey, uuid, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1336,3 +1337,20 @@ export const tenWordsLessons = pgTable("ten_words_lessons", {
   audioBase64: text("audio_base64"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.language, table.lessonNumber] })]);
+
+// Dedicated 10words clients: only hashes are stored; credentials are returned once.
+export const tenWordsApiClients = pgTable("ten_words_api_clients", {
+  id: uuid("id").primaryKey(),
+  ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyHash: varchar("key_hash", { length: 64 }).notNull().unique(),
+  keyPrefix: varchar("key_prefix", { length: 11 }).notNull(),
+  scopes: text("scopes").array().notNull(),
+  rateLimit: integer("rate_limit").notNull().default(120),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().default(sql`date_trunc('minute',now())`),
+  windowCount: integer("window_count").notNull().default(0),
+  usageCount: bigint("usage_count", { mode: "number" }).notNull().default(0),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});

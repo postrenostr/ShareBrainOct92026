@@ -1,43 +1,27 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "express";
+import type { TenWordsApiKeys, TenWordsScope } from "../services/tenWords/apiKeys";
 
-export interface TenWordsApiAuthOptions {
-  getApiKey?: () => string | undefined;
-  now?: () => number;
-  maxRequests?: number;
-}
-
-// Dedicated integration key: this grants access only to the 10words router.
-// Browser sessions continue to use the existing authentication middleware.
-export function createTenWordsAuth(sessionAuth: RequestHandler, {
-  getApiKey = () => process.env.TEN_WORDS_API_KEY,
-  now = Date.now,
-  maxRequests = 120,
-}: TenWordsApiAuthOptions = {}): RequestHandler {
-  let windowStart = 0;
-  let count = 0;
-  return (req, res, next) => {
-    const authorization = req.headers.authorization;
-    if (authorization === undefined) return sessionAuth(req, res, next);
-    const match = authorization.match(/^Bearer ([^\s]{32,256})$/i);
-    const configured = getApiKey();
-    if (!match || !configured || configured.length < 32 || configured.length > 256) {
+export interface TenWordsApiAuthOptions { clients?: Pick<TenWordsApiKeys, "authorize"> }
+export function createTenWordsAuth(sessionAuth: RequestHandler, { clients }: TenWordsApiAuthOptions = {}): RequestHandler {
+  return async (req, res, next) => {
+    if (req.headers.authorization === undefined) return sessionAuth(req, res, next);
+    const match = req.headers.authorization.match(/^Bearer (tw_[a-f0-9]{64})$/i);
+    if (!match || !clients) {
       res.set("WWW-Authenticate", "Bearer").status(401).json({ message: "Invalid 10words API key." });
       return;
     }
-    const hash = (value: string) => createHash("sha256").update(value).digest();
-    if (!timingSafeEqual(hash(match[1]), hash(configured))) {
-      res.set("WWW-Authenticate", "Bearer").status(401).json({ message: "Invalid 10words API key." });
-      return;
+    const scope: TenWordsScope | undefined = req.method === "GET" && /^\/languages\/?$/.test(req.path) ? "languages:read"
+      : req.method === "POST" && /^\/[^/]+\/lesson\/?$/.test(req.path) ? "lessons:read"
+      : req.method === "POST" && /^\/[^/]+\/lessons\/\d+\/audio\/?$/.test(req.path) ? "audio:read" : undefined;
+    if (!scope) { res.status(403).json({ message: "This endpoint is not available to API keys." }); return; }
+    try {
+      const result = await clients.authorize(match[1], scope);
+      if (result === "invalid") res.set("WWW-Authenticate", "Bearer").status(401).json({ message: "Invalid 10words API key." });
+      else if (result === "forbidden") res.status(403).json({ message: "This key does not have permission for this endpoint." });
+      else if (result === "limited") res.set("Retry-After", "60").status(429).json({ message: "This client's request limit has been reached." });
+      else next();
+    } catch {
+      res.status(503).json({ message: "API-key authentication is temporarily unavailable." });
     }
-    const time = now();
-    if (time >= windowStart + 60000 || time < windowStart) { windowStart = time; count = 0; }
-    if (count >= maxRequests) {
-      res.set("Retry-After", String(Math.max(1, Math.ceil((windowStart + 60000 - time) / 1000))))
-        .status(429).json({ message: "10words API rate limit reached. Please retry shortly." });
-      return;
-    }
-    count++;
-    next();
   };
 }

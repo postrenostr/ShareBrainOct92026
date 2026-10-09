@@ -50,9 +50,11 @@ import {
   healthCheck 
 } from "./api/lessonAudio";
 import { stripe, getSubscriptionClientSecret } from "./services/stripeClient";
+import { createTenWordsKeysRouter } from "./routes/tenWordsKeys";
+import { TenWordsApiKeys } from "./services/tenWords/apiKeys";
 import { createTenWordsRouter } from "./routes/tenWords";
 import { tenWordsService } from "./services/tenWords";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, or, sql, ilike, desc, isNull } from "drizzle-orm";
 import { 
   users, agents, contacts, conversations, messages, conversationParticipants,
@@ -466,7 +468,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup Google Authentication
   await setupAuth(app);
-  app.use("/api/10words", createTenWordsRouter(tenWordsService, isAuthenticated));
+  const tenWordsClients = new TenWordsApiKeys(pool);
+  app.use("/api/10words/clients", createTenWordsKeysRouter(tenWordsClients, isAuthenticated));
+  app.use("/api/10words", createTenWordsRouter(tenWordsService, isAuthenticated, { clients: tenWordsClients }));
 
   // Test environment routing - handle all /test/* routes to serve React app
   app.get('/test', (req, res, next) => {

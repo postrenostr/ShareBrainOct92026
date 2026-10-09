@@ -13,7 +13,7 @@ function setup(authenticated = true, apiKey?: string) {
   const app = express();
   app.use(express.json());
   app.use("/api/10words", createTenWordsRouter(service as unknown as TenWordsService,
-    (_req, res, next) => { if (authenticated) next(); else res.status(401).json({ message: "Unauthorized" }); }, { getApiKey: () => apiKey }));
+    (_req, res, next) => { if (authenticated) next(); else res.status(401).json({ message: "Unauthorized" }); }, { clients: { authorize: async (key) => key === apiKey ? "ok" : "invalid" } }));
   return { app, service };
 }
 
@@ -27,7 +27,7 @@ describe("10words API", () => {
     expect(service.getAudio).not.toHaveBeenCalled();
   });
   it("allows API-key access to catalog, lesson JSON and WAV audio without a browser login", async () => {
-    const key = "test_integration_" + "a".repeat(48);
+    const key = "tw_" + "a".repeat(64);
     const { app, service } = setup(false, key);
     await request(app).get("/api/10words/languages").set("Authorization", `Bearer ${key}`).expect(200);
     const lesson = await request(app).post("/api/10words/fr/lesson").set("Authorization", `Bearer ${key}`)
