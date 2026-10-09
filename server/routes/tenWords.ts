@@ -27,7 +27,7 @@ export function createTenWordsRouter(service: TenWordsService, authenticate: Req
     try {
       const audio = await service.getAudio(req.params.language, Number(req.params.lessonNumber));
       res.set({
-        "Content-Type": "audio/wav",
+        "Content-Type": "audio/mpeg",
         "Cache-Control": "private, no-cache",
       }).send(audio);
     } catch (error) {

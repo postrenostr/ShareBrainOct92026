@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { tenWordsContentSchema, tenWordsLanguages, lessonLevel, type TenWordsLanguage } from "@shared/tenWords";
 import { tenWordsCurriculum } from "./curriculum";
 import type { LessonGenerator } from "./service";
-import { joinLessonAudio } from "./audio";
+
 
 const scripts: Record<string, RegExp> = {
   zh: new RegExp(String.raw`\p{Script=Han}`, "u"),
@@ -77,23 +77,11 @@ Otherwise return {"valid":false}.` },
       }
       throw new Error("Could not generate lesson");
     },
-    async speak(lesson) {
-      const content = tenWordsContentSchema.parse(lesson);
-      const client = getClient();
-      const narrate = async (input: string) => {
-        const response = await client.audio.speech.create({
-          model: "tts-1", voice: "alloy", input, response_format: "pcm", speed: 0.9,
-        });
-        return Buffer.from(await response.arrayBuffer());
-      };
-      // Separate words let us insert real silence rather than relying on TTS punctuation.
-      // Limit concurrency to three requests; cache the complete recording afterwards.
-      const words: Buffer[] = [];
-      for (let index = 0; index < content.words.length; index += 3) {
-        words.push(...await Promise.all(content.words.slice(index, index + 3).map(narrate)));
-      }
-      const sentences = await narrate(content.sentences.join("\n"));
-      return joinLessonAudio(words, sentences);
+    async speak(text) {
+      const response = await getClient().audio.speech.create({
+        model: "tts-1", voice: "alloy", input: text, response_format: "mp3",
+      });
+      return Buffer.from(await response.arrayBuffer());
     },
   };
 }

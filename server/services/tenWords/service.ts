@@ -1,7 +1,6 @@
-import { tenWordsContentSchema, tenWordsLanguages, TEN_WORDS_LESSON_COUNT,
+import { isMp3Audio } from "./audio";
+import { tenWordsContentSchema, tenWordsLanguages, lessonText, TEN_WORDS_LESSON_COUNT,
   type TenWordsContent, type TenWordsLanguage, type TenWordsLesson } from "@shared/tenWords";
-
-import { isPausedLessonAudio } from "./audio";
 
 export interface SavedLesson extends TenWordsLesson { audioBase64: string | null }
 export interface LessonStore {
@@ -12,7 +11,7 @@ export interface LessonStore {
 }
 export interface LessonGenerator {
   generate(language: TenWordsLanguage, lessonNumber: number): Promise<TenWordsContent>;
-  speak(lesson: TenWordsContent): Promise<Buffer>;
+  speak(text: string): Promise<Buffer>;
 }
 export class TenWordsError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -75,18 +74,14 @@ export class TenWordsService {
     const lesson = await this.getLesson(language, lessonNumber);
     let saved = await this.store.find(language, lessonNumber);
     if (!saved) throw new Error("Lesson not found");
-    if (!saved.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
+    if (!saved.audioBase64 || !isMp3Audio(Buffer.from(saved.audioBase64, "base64"))) {
       const previousAudio = saved.audioBase64;
-      const audio = await this.generator.speak({ words: lesson.words, sentences: lesson.sentences });
-      if (!isPausedLessonAudio(audio)) throw new Error("Invalid paused lesson audio");
-      // Upgrade older recordings without changing the saved text. A failed
-      // upgrade preserves the old bytes but must not play unpaused audio.
+      const audio = await this.generator.speak(lessonText(lesson));
+      if (!isMp3Audio(audio)) throw new Error("Invalid MP3 lesson audio");
       await this.store.saveAudioIfUnchanged(language, lessonNumber, audio.toString("base64"), previousAudio);
       saved = await this.store.find(language, lessonNumber);
     }
-    if (!saved?.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
-      throw new Error("Paused lesson audio could not be saved");
-    }
+    if (!saved?.audioBase64 || !isMp3Audio(Buffer.from(saved.audioBase64, "base64"))) throw new Error("Lesson audio could not be saved");
     return Buffer.from(saved.audioBase64, "base64");
   }
 }
