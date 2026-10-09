@@ -3,7 +3,7 @@ name: Google login domain
 description: User's domain requirement for Google login on this ShareBrain copy.
 ---
 
-The user wants to set up Google login using their own domain.
+The user wants to set up Google login using `sharebrains.net`. They said nothing is currently hosted on that domain.
 
 **Why:** The user requested this rather than using the Replit development callback.
 

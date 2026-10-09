@@ -42,3 +42,6 @@ integrations = ["javascript_database==1.0.0", "javascript_anthropic==1.0.0", "ja
 
 [userenv.development]
 GOOGLE_CALLBACK_URL = "https://a668e9cd-9604-4122-afde-12967ff56c7d-00-iwk9b0y80yyx.kirk.replit.dev/api/auth/google/callback"
+
+[userenv.production]
+GOOGLE_CALLBACK_URL = "https://sharebrains.net/api/auth/google/callback"
