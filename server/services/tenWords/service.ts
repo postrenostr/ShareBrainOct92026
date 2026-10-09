@@ -1,7 +1,7 @@
 import { tenWordsContentSchema, tenWordsLanguages, TEN_WORDS_LESSON_COUNT,
   type TenWordsContent, type TenWordsLanguage, type TenWordsLesson } from "@shared/tenWords";
 
-import { isPausedLessonAudio } from "./audio";
+import { isPausedLessonAudio, isLegacyMp3Audio } from "./audio";
 
 export interface SavedLesson extends TenWordsLesson { audioBase64: string | null }
 export interface LessonStore {
@@ -77,12 +77,18 @@ export class TenWordsService {
     if (!saved) throw new Error("Lesson not found");
     if (!saved.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
       const previousAudio = saved.audioBase64;
-      const audio = await this.generator.speak({ words: lesson.words, sentences: lesson.sentences });
-      if (!isPausedLessonAudio(audio)) throw new Error("Invalid paused lesson audio");
-      // Upgrade old MP3 recordings without changing the saved lesson. If another
-      // process has already upgraded the audio, retain its winner.
-      await this.store.saveAudioIfUnchanged(language, lessonNumber, audio.toString("base64"), previousAudio);
-      saved = await this.store.find(language, lessonNumber);
+      try {
+        const audio = await this.generator.speak({ words: lesson.words, sentences: lesson.sentences });
+        if (!isPausedLessonAudio(audio)) throw new Error("Invalid paused lesson audio");
+        // Upgrade old MP3 recordings without changing the saved lesson. If another
+        // process has already upgraded the audio, retain its winner.
+        await this.store.saveAudioIfUnchanged(language, lessonNumber, audio.toString("base64"), previousAudio);
+        saved = await this.store.find(language, lessonNumber);
+      } catch (error) {
+        const legacy = previousAudio ? Buffer.from(previousAudio, "base64") : null;
+        if (legacy && isLegacyMp3Audio(legacy)) return legacy;
+        throw error;
+      }
     }
     if (!saved?.audioBase64 || !isPausedLessonAudio(Buffer.from(saved.audioBase64, "base64"))) {
       throw new Error("Paused lesson audio could not be saved");

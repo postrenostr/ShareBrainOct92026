@@ -5,3 +5,4 @@
 - [Offline test safety](offline-test-safety.md) — dummy credentials and an in-memory store do not prevent network calls; isolate current database/provider boundaries.
 - [Built-in catalog publishing](catalog-publishing.md) — development seeding is not proof of live restoration; use a deliberate, idempotent published-data initialization path.
 - [Language lesson experience](language-lesson-experience.md) — the prior Catalan tutor returned ten words and ten sentences with playable pronunciation audio.
+- [Mobile 10words access](mobile-navigation.md) — keep 10words above More on phones; shared desktop/mobile markup is not proof of mobile visibility.

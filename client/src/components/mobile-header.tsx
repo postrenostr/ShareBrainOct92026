@@ -22,8 +22,9 @@ export default function MobileHeader({ onMenuToggle }: MobileHeaderProps) {
         size="sm"
         onClick={onMenuToggle}
         className="h-10 w-10 p-0 text-white hover:bg-gray-800"
+        aria-label="Open navigation menu"
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="h-5 w-5" aria-hidden="true" />
       </Button>
     </div>
   );

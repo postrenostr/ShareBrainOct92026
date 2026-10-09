@@ -19,6 +19,16 @@ function setup() {
 }
 
 describe("10words generation and speech", () => {
+  it("guards native scripts throughout the expanded catalog, including regional variants", () => {
+    for (const language of tenWordsLanguages) {
+      if (!/[^\p{Script=Latin}\p{Mark}\s'’ʻ-]/u.test(language.nativeName)) continue;
+      expect(() => validateNativeScript(language.code, [language.nativeName])).not.toThrow();
+      expect(() => validateNativeScript(language.code, ["hello"])).toThrow("native script");
+    }
+    expect(() => validateNativeScript("ja", ["こんにちは"])).not.toThrow();
+    expect(() => validateNativeScript("ar-EG", ["مرحبا hello"])).toThrow("native script");
+  });
+
   it("generates and independently reviews target-only content", async () => {
     const { generator, create } = setup();
     create.mockResolvedValueOnce(completion(content)).mockResolvedValueOnce(completion({ valid: true }));

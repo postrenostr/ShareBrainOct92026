@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Bot, Home, Plus, BookOpen, FlaskRound, User, Volume2, Code, Users, List, LogOut, Zap, Store, MessageCircle, Settings, Menu, X, Heart, MoreHorizontal, ChevronDown, ChevronUp, Briefcase, Sparkles, Globe, Megaphone, BarChart3, ShoppingBag, Brain } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -17,6 +17,13 @@ export default function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
   const [accessCode, setAccessCode] = useState("");
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [password, setPassword] = useState("");
+  const navigationRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (isOpen && navigationRef.current) {
+      navigationRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
   
   const MORE_SECTION_PASSWORD = "SHAREBRAIN_MORE_2025";
   
@@ -82,19 +89,7 @@ export default function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
   ];
 
   // Test environment detection for routing only
-  const [isTestEnvironment, setIsTestEnvironment] = React.useState(false);
-  
-  React.useEffect(() => {
-    const checkTestEnvironment = () => {
-      const path = window.location.pathname;
-      setIsTestEnvironment(path.startsWith('/test'));
-    };
-    
-    checkTestEnvironment();
-    // Also check on location changes
-    const interval = setInterval(checkTestEnvironment, 100);
-    return () => clearInterval(interval);
-  }, [location]);
+  const isTestEnvironment = location.startsWith("/test");
   
   // Helper function to create test-environment aware paths
   const getPath = (path: string) => {
@@ -124,11 +119,11 @@ export default function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
       
       {/* Sidebar */}
       <div className={`
-        fixed lg:relative lg:translate-x-0 z-50
+        fixed top-0 left-0 lg:relative lg:translate-x-0 z-50
         w-64 bg-background border-r border-border flex flex-col
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        h-screen
+        h-[100dvh] lg:h-screen
       `}>
       {/* Logo & Brand */}
       <div className="px-6 py-6 pb-10 border-b border-border">
@@ -142,19 +137,29 @@ export default function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
           
           {/* Mobile Sign Out Button */}
           <div className="lg:hidden">
-            <button
-              onClick={() => window.location.href = '/api/logout'}
-              className="px-3 py-2 rounded-lg text-foreground hover:bg-muted transition-colors text-sm"
-              title="Sign Out"
-            >
-              Sign Out
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => window.location.href = '/api/logout'}
+                className="px-3 py-2 rounded-lg text-foreground hover:bg-muted transition-colors text-sm"
+                title="Sign Out"
+              >
+                Sign Out
+              </button>
+              <button
+                type="button"
+                onClick={onToggle}
+                className="p-2 rounded-lg text-white hover:bg-muted transition-colors"
+                aria-label="Close navigation menu"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav ref={navigationRef} aria-label="Primary navigation" className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         <Link href={getPath("/10words")} onClick={onToggle}
           className={`flex items-center gap-3 rounded-lg px-3 py-2 font-medium transition-colors ${isActive("/10words") ? "bg-muted text-white" : "text-white hover:bg-muted"}`}>
           <BookOpen className="h-5 w-5" aria-hidden="true" />

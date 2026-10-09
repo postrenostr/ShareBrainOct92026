@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { tenWordsContentSchema, lessonLevel, type TenWordsLanguage } from "@shared/tenWords";
+import { tenWordsContentSchema, tenWordsLanguages, lessonLevel, type TenWordsLanguage } from "@shared/tenWords";
 import { tenWordsCurriculum } from "./curriculum";
 import type { LessonGenerator } from "./service";
 import { joinLessonAudio } from "./audio";
@@ -12,8 +12,17 @@ const scripts: Record<string, RegExp> = {
   ar: new RegExp(String.raw`\p{Script=Arabic}`, "u"),
   hi: new RegExp(String.raw`\p{Script=Devanagari}`, "u"),
 };
+// Native names provide the script for expanded catalog entries and regional
+// variants. Keep explicit Japanese support above for both kana and kanji.
+const expandedScripts = [
+  "Arabic", "Devanagari", "Han", "Cyrillic", "Bengali", "Telugu", "Tamil",
+  "Gujarati", "Myanmar", "Oriya", "Thai", "Sinhala", "Khmer", "Greek",
+  "Hebrew", "Lao", "Ethiopic", "Georgian",
+].map(name => new RegExp(`\\p{Script=${name}}`, "u"));
+
 export function validateNativeScript(language: string, entries: string[]): void {
-  const script = scripts[language];
+  const nativeName = tenWordsLanguages.find(item => item.code === language)?.nativeName ?? "";
+  const script = scripts[language] ?? expandedScripts.find(pattern => pattern.test(nativeName));
   if (script && entries.some(entry => !script.test(entry) || /[A-Za-z]/.test(entry))) {
     throw new Error("Lesson must use the target language's native script");
   }
