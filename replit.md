@@ -62,7 +62,6 @@ A PostgreSQL database is used for persistent storage of:
 - **Design System**: Consistent black and white theme (`#000000` and `#ffffff`) applied across the entire application for a unified UI/UX.
 
 ## External Dependencies
-- **@replit/connectors-sdk**: Authenticated access to the connected Stripe account.
 - **@neondatabase/serverless**: PostgreSQL database connectivity.
 - **drizzle-orm**: Type-safe ORM for database operations.
 - **@tanstack/react-query**: For server state management.
@@ -85,7 +84,9 @@ A PostgreSQL database is used for persistent storage of:
 - Development uses a fresh PostgreSQL database, not a copy of the original ShareBrain production data. Its tables were initialized from `shared/schema.ts` using `npm run db:push`.
 - `generate-agents-batch.sql` was imported once and contains four starter music tutor templates. Do not rerun it without checking for duplicates.
 - The old SQL migrations do not cover the full current schema; do not replay them on this initialized database.
-- Required Secrets: `OPENAI_API_KEY`, `TOGETHER_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_SECRET`, and `SESSION_SECRET`. The database connection is runtime-managed.
+- Required Secrets: `OPENAI_API_KEY`, `TOGETHER_API_KEY`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_SECRET`, and `SESSION_SECRET`. The database connection is runtime-managed. `ANTHROPIC_API_KEY` is optional for startup but needed for Claude features.
 - Required configuration: `GOOGLE_CLIENT_ID`, `GOOGLE_CALLBACK_URL`, and `VITE_STRIPE_PUBLIC_KEY`. Register the callback URL (ending in `/api/auth/google/callback`) as an authorized redirect URI in the Google OAuth application.
-- Stripe server requests use the attached Stripe connection; no `STRIPE_SECRET_KEY` is needed. The browser publishable key must belong to that same account and mode.
+- The planned custom domain is `sharebrains.net`. Production has `GOOGLE_CALLBACK_URL=https://sharebrains.net/api/auth/google/callback`; this is a planned address, not a verified live domain. Publishing and DNS connection remain user actions. Development keeps a separate preview callback.
+- Stripe server requests use the original direct Stripe SDK method with the user's `STRIPE_SECRET_KEY`. The browser publishable key must belong to that same account and mode. Do not switch this project to managed Stripe authentication unless the user asks.
+- The previously attached Replit-managed Stripe connection is separate from this application's direct authentication. A remaining managed-connection publishing restriction must be handled in the platform UI; changing the application code does not confirm that the restriction has cleared.
 - For schema changes on the development database, use `npm run db:push`. Build with `npm run build`; start a built app with `npm run start`.
