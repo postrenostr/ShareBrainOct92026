@@ -13,6 +13,7 @@
     "test:10words:browser": "TEN_WORDS_BROWSER_TESTS=1 vitest run client/src/components/ten-words-keys.browser.test.ts",
     "db:push": "drizzle-kit push",
     "db:10words": "tsx server/scripts/migrateTenWords.ts",
+    "audio:10words:test-hd": "tsx server/scripts/testTenWordsHd.ts",
     "seed:languages": "tsx server/scripts/bulkCreateLanguageTutors.ts",
     "seed:lesson-cache": "tsx server/scripts/populateLessonCache.ts"
   },
