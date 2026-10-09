@@ -1,1 +1,2 @@
 - [Imported dependency security](imported-dependency-security.md) — imported lockfiles can be blocked by the package firewall; preserve runtime compatibility during updates.
+- [Google login domain](google-login-domain.md) — the user wants Google login on their own domain, not a Replit development domain.
