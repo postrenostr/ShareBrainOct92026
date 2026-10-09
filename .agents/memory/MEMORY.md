@@ -3,3 +3,4 @@
 - [Stripe configuration](stripe-publishing.md) — the user wants the original direct Stripe SDK setup with their own keys in Secrets.
 - [Free-agent sign-in](free-agent-access.md) — signing in and username setup must allow existing free-agent use without card setup; keep paid features protected.
 - [Offline test safety](offline-test-safety.md) — dummy credentials and an in-memory store do not prevent network calls; isolate current database/provider boundaries.
+- [Built-in catalog publishing](catalog-publishing.md) — development seeding is not proof of live restoration; use a deliberate, idempotent published-data initialization path.

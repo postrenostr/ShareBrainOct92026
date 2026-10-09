@@ -2,6 +2,8 @@ import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic, log } from "./static";
+import { initializeLanguageTutorCatalog } from "./services/languageTutorCatalog";
+import { pool } from "./db";
 
 const app = express();
 app.use(express.json());
@@ -38,6 +40,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    const catalog = await initializeLanguageTutorCatalog();
+    log(`Language tutor catalog ready: ${catalog.total} tutors; ${catalog.created} created, ${catalog.repaired} repaired`);
+  } catch {
+    console.error("Language tutor initialization failed. Check database connectivity and catalog integrity before restarting.");
+    process.exitCode = 1;
+    await pool.end();
+    return;
+  }
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

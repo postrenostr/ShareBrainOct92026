@@ -21,6 +21,7 @@ vi.mock('./storage', async () => {
 import { storage } from './storage'
 import { db } from './db'
 import { intelligentMemoryService } from './intelligentMemoryService'
+import { buildLanguageTutorDefinitions } from './services/languageTutorDefinitions'
 
 import { registerRoutes } from './routes'
 
@@ -105,6 +106,19 @@ describe('GET /api/agents', () => {
 })
 
 describe('POST /api/chat', () => {
+  it('lets a user without a trial or card open a system-owned language tutor', async () => {
+    const tutor = await storage.createAgent(buildLanguageTutorDefinitions().find(row => row.name === 'Spanish Language Tutor')!)
+    await storage.updateUser('user-1', {
+      subscriptionStatus: 'none', stripeCustomerId: null, trialStartDate: null, trialEndDate: null,
+    })
+    const response = await request(app)
+      .post('/api/chat')
+      .send({ agentId: tutor.id, message: 'instructions' })
+      .expect(200)
+    expect(response.body.content).toContain('Teach Spanish')
+    expect(response.body.content).toContain('Lesson 1 (words 1-10)')
+  })
+
   it('allows authenticated free chat while keeping paid agent creation blocked', async () => {
     const agent = await request(app)
       .post('/api/agents')
