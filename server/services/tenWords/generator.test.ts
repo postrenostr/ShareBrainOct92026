@@ -13,7 +13,7 @@ const content = {
 const completion = (value: unknown) => ({ choices: [{ message: { content: JSON.stringify(value) } }] });
 function setup() {
   const create = vi.fn();
-  const speech = vi.fn(async () => ({ arrayBuffer: async () => Buffer.from("mp3") }));
+  const speech = vi.fn(async (_request: unknown) => ({ arrayBuffer: async () => Buffer.from([1, 0]) }));
   const client = { chat: { completions: { create } }, audio: { speech: { create: speech } } } as unknown as OpenAI;
   return { generator: createTenWordsGenerator(() => client), create, speech };
 }
@@ -28,6 +28,13 @@ describe("10words generation and speech", () => {
     expect(request.messages[0].content).toContain("entirely in Spanish");
     expect(JSON.parse(request.messages[1].content).curriculum).toEqual(tenWordsCurriculum[0]);
     expect(lessonText(content)).toBe(content.words.join("\n") + "\n\n" + content.sentences.join("\n"));
+  });
+  it("supports English as the target language without forbidding English text", async () => {
+    const { generator, create } = setup();
+    create.mockResolvedValueOnce(completion(content)).mockResolvedValueOnce(completion({ valid: true }));
+    await generator.generate(tenWordsLanguages.find(language => language.code === "en")!, 1);
+    expect(create.mock.calls[0][0].messages[0].content).toContain("entirely in English");
+    expect(create.mock.calls[0][0].messages[0].content).not.toContain("No English");
   });
   it("retries output rejected by language review", async () => {
     const { generator, create } = setup();
@@ -56,10 +63,18 @@ describe("10words generation and speech", () => {
     expect(JSON.parse(create.mock.calls[0][0].messages[1].content).curriculum).toContain("Responsibility");
     expect(JSON.parse(create.mock.calls[0][0].messages[1].content).earlierVocabulary).toContain("Water");
   });
-  it("passes only lesson text to TTS", async () => {
+  it("narrates words separately with slower speech and no helper prose", async () => {
     const { generator, speech } = setup();
-    await generator.speak(lessonText(content));
-    expect(speech).toHaveBeenCalledWith({ model: "tts-1", voice: "alloy", input: lessonText(content), response_format: "mp3" });
+    const audio = await generator.speak(content);
+    expect(speech).toHaveBeenCalledTimes(11);
+    expect(speech.mock.calls.map(call => (call[0] as { input: string }).input)).toEqual([...content.words, content.sentences.join("\n")]);
+    expect(speech).toHaveBeenCalledWith({ model: "tts-1", voice: "alloy", input: "Hola", response_format: "pcm", speed: 0.9 });
+    expect(audio.toString("ascii", 0, 4)).toBe("RIFF");
+  });
+  it("does not produce a recording when a word narration fails", async () => {
+    const { generator, speech } = setup();
+    speech.mockRejectedValueOnce(new Error("TTS unavailable"));
+    await expect(generator.speak(content)).rejects.toThrow("TTS unavailable");
   });
 });
 

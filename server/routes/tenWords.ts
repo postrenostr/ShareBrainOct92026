@@ -25,7 +25,7 @@ export function createTenWordsRouter(service: TenWordsService, authenticate: Req
     if (!/^\d+$/.test(req.params.lessonNumber)) return res.status(400).json({ message: "Invalid lesson number." });
     try {
       const audio = await service.getAudio(req.params.language, Number(req.params.lessonNumber));
-      res.set({ "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=86400" }).send(audio);
+      res.set({ "Content-Type": "audio/wav", "Cache-Control": "private, no-cache" }).send(audio);
     } catch (error) {
       console.error("10words audio request failed:", error instanceof Error ? error.name : "Unknown error");
       res.status(error instanceof TenWordsError ? error.status : 503).json({

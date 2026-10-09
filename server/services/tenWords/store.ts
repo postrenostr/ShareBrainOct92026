@@ -14,9 +14,9 @@ export const tenWordsStore: LessonStore = {
       target: [tenWordsLessons.language, tenWordsLessons.lessonNumber],
     });
   },
-  async saveAudioOnce(language, lessonNumber, audioBase64) {
+  async saveAudioIfUnchanged(language, lessonNumber, audioBase64, previousAudio) {
     await db.update(tenWordsLessons).set({ audioBase64 }).where(and(
       eq(tenWordsLessons.language, language), eq(tenWordsLessons.lessonNumber, lessonNumber),
-      isNull(tenWordsLessons.audioBase64)));
+      previousAudio === null ? isNull(tenWordsLessons.audioBase64) : eq(tenWordsLessons.audioBase64, previousAudio)));
   },
 };

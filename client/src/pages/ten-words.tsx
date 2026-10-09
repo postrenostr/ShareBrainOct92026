@@ -15,6 +15,7 @@ export default function TenWords() {
   const base = location.startsWith("/test/") ? "/test/10words" : "/10words";
   const [, params] = useRoute(`${base}/:language`);
   const language = tenWordsLanguages.find(item => item.code === params?.language);
+  const [search, setSearch] = useState("");
   const [command, setCommand] = useState("Lesson 1");
   const [lesson, setLesson] = useState<TenWordsLesson | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,8 +122,12 @@ export default function TenWords() {
       <p className="mt-3 text-muted-foreground">Ten words. Ten sentences. Hear only the language you’re learning.</p>
       <p className="mt-2 text-sm text-muted-foreground">Fifty saved lessons, from simple everyday words to more challenging ideas. Choose your language.</p>
       {params?.language && <p role="alert" className="mt-4">That language is not available. Choose one below.</p>}
+      <div className="mt-6 max-w-md">
+        <label htmlFor="language-search" className="sr-only">Search languages</label>
+        <Input id="language-search" placeholder="Search 100 languages" value={search} onChange={event => setSearch(event.target.value)} />
+      </div>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {tenWordsLanguages.map(item => (
+        {tenWordsLanguages.filter(item => `${item.name} ${item.nativeName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map(item => (
           <Link key={item.code} href={`${base}/${item.code}`} className="rounded-xl border border-border p-6 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">
             <BookOpen className="mb-4 h-6 w-6" aria-hidden="true" />
             <h2 className="text-lg font-semibold">{item.name}</h2>
@@ -130,6 +135,7 @@ export default function TenWords() {
           </Link>
         ))}
       </div>
+      {!tenWordsLanguages.some(item => `${item.name} ${item.nativeName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && <p role="status" className="mt-6">No languages match your search.</p>}
     </main>
   );
 

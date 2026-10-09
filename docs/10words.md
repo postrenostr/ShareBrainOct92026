@@ -2,7 +2,7 @@
 
 A separate language section at `/10words`, linked directly from the sidebar. It does not alter existing language teachers, prompts, chat handling or lesson caches.
 
-Fourteen language agents share a fixed, version-one curriculum of fifty lessons. The progression starts with everyday vocabulary and advances to nuanced, abstract language. Each lesson contains ten vocabulary items (a fixed expression such as “thank you” counts as one item) and ten sentences using the corresponding items. Later sentences reuse earlier vocabulary and become more complex.
+One hundred language agents, matching the normal tutor catalog, share a fixed, version-one curriculum of fifty lessons. The progression starts with everyday vocabulary and advances to nuanced, abstract language. Each lesson contains ten vocabulary items (a fixed expression such as “thank you” counts as one item) and ten sentences using the corresponding items. Later sentences reuse earlier vocabulary and become more complex.
 
 ## Setup
 
@@ -32,9 +32,9 @@ Typing `Lesson 1` selects the saved lesson for that language. On first access on
 
 The database primary key is `(language, lesson_number)`. Inserts do nothing on conflict, then read the persisted winner. Multiple users or server processes therefore receive identical saved content. In-process requests also share generation work. Content is not updated during visits, retries, server restarts or deployments. There is no automatic expiry, regeneration or edit endpoint. Any future editorial change must be explicit and coordinated with saved audio; changing the curriculum file does not change previously saved lessons. Back up this table as part of normal database backups.
 
-Audio is generated from the saved ten words followed by the saved ten sentences, separated by line breaks. Titles, English UI controls, lesson numbers and translations are never part of the speech input. MP3 data is saved in the same record, once. Speech failures preserve the text; retries generate only missing audio. Competing audio writes retain the database winner. Content is saved before narration, so a temporary audio failure cannot produce a different lesson on retry.
+Audio is generated from the saved ten words followed by the saved ten sentences. Words are narrated separately as 24 kHz mono PCM at 0.9× speech speed, then joined with 600 ms of actual silence between words and a one-second pause before the sentence block. The complete recording is packaged as WAV. Titles, English UI controls, lesson numbers and translations are never part of the speech input. WAV data is saved in the same record, once. Speech failures preserve the text; retries generate only missing audio. Competing audio writes retain the database winner. Existing MP3 recordings are upgraded on first playback using the same saved text. The upgrade uses a compare-and-swap against the previous recording, preserves the old audio if generation fails, and does not require a schema migration. Only audio is refreshed; lesson words and sentences remain fixed. Content is saved before narration, so a temporary audio failure cannot produce a different lesson on retry.
 
-OpenAI's TTS model detects pronunciation from the native text. The browser attempts playback after a requested lesson loads and offers Play if autoplay is blocked. Pause, replay, previous and next controls are provided. Lesson text uses plain paragraphs rather than numbered or bulleted lists. Arabic content is right-to-left.
+OpenAI's TTS model detects pronunciation from the native text. The catalog includes a language search field. No lessons or recordings are generated simply by listing language choices. Pronunciation quality may vary by language; live language/audio checks require configured API credentials. The browser attempts playback after a requested lesson loads and offers Play if autoplay is blocked. Pause, replay, previous and next controls are provided. Lesson text uses plain paragraphs rather than numbered or bulleted lists. Arabic content is right-to-left.
 
 ## API and validation
 
@@ -42,7 +42,7 @@ All new endpoints require the existing authentication middleware:
 
 - `GET /api/10words/languages` — language catalog and lesson count.
 - `POST /api/10words/:language/lesson` with `{"command":"Lesson 1"}` — return or create the fixed lesson.
-- `POST /api/10words/:language/lessons/:lessonNumber/audio` — return or create its saved MP3.
+- `POST /api/10words/:language/lessons/:lessonNumber/audio` — return or create its saved WAV.
 
 Only supported language codes and lessons 1–50 are accepted. Generation uses POST to prevent link prefetchers from creating lessons. Database and API failures return an error separately from lesson content.
 
