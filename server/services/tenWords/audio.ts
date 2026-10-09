@@ -21,17 +21,35 @@ export function pcmWave(pcm: Buffer): Buffer {
   return Buffer.concat([header, pcm]);
 }
 
+// Validate the actual PCM gaps, not just a WAV container. Old WAV recordings
+// without pauses must be upgraded just like old MP3 recordings.
 export function isPausedLessonAudio(audio: Buffer): boolean {
-  return audio.length > 44 && audio.toString("ascii", 0, 4) === "RIFF" &&
-    audio.toString("ascii", 8, 16) === "WAVEfmt " && audio.toString("ascii", 36, 40) === "data" &&
-    audio.readUInt32LE(40) === audio.length - 44;
-}
-
-// Older saved recordings used MP3. Recognize their header before returning
-// them as a fallback; arbitrary bytes must not be served as playable audio.
-export function isLegacyMp3Audio(audio: Buffer): boolean {
-  return audio.length >= 3 && (audio.toString("ascii", 0, 3) === "ID3" ||
-    (audio[0] === 0xff && (audio[1] & 0xe0) === 0xe0));
+  if (audio.length <= 44 || audio.toString("ascii", 0, 4) !== "RIFF" ||
+    audio.readUInt32LE(4) !== audio.length - 8 ||
+    audio.toString("ascii", 8, 16) !== "WAVEfmt " || audio.readUInt32LE(16) !== 16 ||
+    audio.readUInt16LE(20) !== 1 || audio.readUInt16LE(22) !== 1 ||
+    audio.readUInt32LE(24) !== SAMPLE_RATE || audio.readUInt32LE(28) !== SAMPLE_RATE * 2 ||
+    audio.readUInt16LE(32) !== 2 || audio.readUInt16LE(34) !== 16 ||
+    audio.toString("ascii", 36, 40) !== "data" ||
+    audio.readUInt32LE(40) !== audio.length - 44 || (audio.length - 44) % 2) return false;
+  const wordSamples = SAMPLE_RATE * WORD_PAUSE_MS / 1000;
+  const sectionSamples = SAMPLE_RATE * SECTION_PAUSE_MS / 1000;
+  let run = 0;
+  let gaps = 0;
+  let hasSectionGap = false;
+  let heardAudio = false;
+  for (let offset = 44; offset < audio.length; offset += 2) {
+    if (audio[offset] === 0 && audio[offset + 1] === 0) { run++; continue; }
+    // Only count silence between audible segments, never leading/trailing padding.
+    if (heardAudio && run >= wordSamples) {
+      gaps++;
+      if (run >= sectionSamples) hasSectionGap = true;
+    }
+    heardAudio = true;
+    run = 0;
+    if (gaps >= 10 && hasSectionGap) return true;
+  }
+  return false;
 }
 
 export function joinLessonAudio(words: Buffer[], sentences: Buffer): Buffer {

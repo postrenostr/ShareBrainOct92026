@@ -11,6 +11,7 @@
     "test": "vitest run",
     "db:push": "drizzle-kit push",
     "db:10words": "tsx server/scripts/migrateTenWords.ts",
+    "audio:10words:refresh": "tsx server/scripts/refreshTenWordsAudio.ts",
     "seed:languages": "tsx server/scripts/bulkCreateLanguageTutors.ts",
     "seed:lesson-cache": "tsx server/scripts/populateLessonCache.ts"
   },

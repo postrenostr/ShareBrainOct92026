@@ -32,11 +32,24 @@ Typing `Lesson 1` selects the saved lesson for that language. On first access on
 
 The database primary key is `(language, lesson_number)`. Inserts do nothing on conflict, then read the persisted winner. Multiple users or server processes therefore receive identical saved content. In-process requests also share generation work. Content is not updated during visits, retries, server restarts or deployments. There is no automatic expiry, regeneration or edit endpoint. Any future editorial change must be explicit and coordinated with saved audio; changing the curriculum file does not change previously saved lessons. Back up this table as part of normal database backups.
 
-Audio is generated from the saved ten words followed by the saved ten sentences. Words are narrated separately as 24 kHz mono PCM at 0.9× speech speed, then joined with 600 ms of actual silence between words and a one-second pause before the sentence block. The complete recording is packaged as WAV. Titles, English UI controls, lesson numbers and translations are never part of the speech input. WAV data is saved in the same record, once. Speech failures preserve the text; retries generate only missing audio. Competing audio writes retain the database winner. Existing MP3 recordings are upgraded on first playback using the same saved text. The upgrade uses a compare-and-swap against the previous recording, preserves the old audio if generation fails, and does not require a schema migration. Only audio is refreshed; lesson words and sentences remain fixed. Content is saved before narration, so a temporary audio failure cannot produce a different lesson on retry.
+Audio is generated from the saved ten words followed by the saved ten sentences. Words are narrated separately as 24 kHz mono PCM at 0.9× speech speed, then joined with 600 ms of actual silence between words and a one-second pause before the sentence block. The complete recording is packaged as WAV. Titles, English UI controls, lesson numbers and translations are never part of the speech input. WAV data is saved in the same record, once. Speech failures preserve the text; retries generate only missing audio. Competing audio writes retain the database winner. Existing MP3 recordings and WAV recordings without verified pauses are upgraded on first playback using the same saved text. The upgrade uses a compare-and-swap against the previous recording, preserves the old audio if generation fails (returning an audio-unavailable error instead of playing the unpaused recording), and does not require a schema migration. Only audio is refreshed; lesson words and sentences remain fixed. Content is saved before narration, so a temporary audio failure cannot produce a different lesson on retry.
 
-If a saved MP3 cannot be upgraded because narration is unavailable, the existing MP3 is returned with `Content-Type: audio/mpeg` rather than stranding the recording. Successful upgrades and new recordings use `audio/wav`. Consumers must respect the response content type instead of assuming every response is WAV. Failed upgrades leave saved text and audio unchanged; a later request can retry the upgrade.
+Cached audio is accepted only when its PCM format and at least ten internal silence gaps are verified: nine gaps of at least 600 ms and a section gap of at least one second. Leading/trailing padding does not count. If an upgrade fails, the endpoint returns an audio-unavailable error; saved text and previous bytes remain unchanged, and a later request can retry. Refresh the 10words page after deploying so an already loaded browser audio blob is not reused.
 
 OpenAI's TTS model detects pronunciation from the native text. The catalog includes a language search field. No lessons or recordings are generated simply by listing language choices. Pronunciation quality may vary by language; live language/audio checks require configured API credentials. The browser attempts playback after a requested lesson loads and offers Play if autoplay is blocked. Pause, replay, previous and next controls are provided. Lesson text uses plain paragraphs rather than numbered or bulleted lists. Arabic content is right-to-left.
+
+## Refresh audio for existing lessons
+
+Run these commands in the application environment with securely configured database credentials. Target the database containing the lessons users hear; development and deployed production have separate records. This is a data-only update, not a schema migration. Do not change database credentials in source control.
+
+```sh
+npm run audio:10words:refresh
+npm run audio:10words:refresh -- --apply
+```
+
+The first command lists saved lessons and reports which recordings need refresh without generating audio or writing data. The second requires `OPENAI_API_KEY` and generates replacement narration only for existing lessons with missing/unverified audio. Already verified recordings are skipped. Each refreshed lesson uses eleven TTS requests (ten individual words plus the sentence block), with normal voice-generation charges. No new lessons or lesson text are generated.
+
+Recordings are verified before saving. Updates match the previous audio and saved text, so concurrent edits/refreshes cannot be overwritten. Failures preserve the previous record, continue to the next lesson, and produce a nonzero exit status; rerun to check remaining work. Summary fields report total/current/pending/updated/changed/failed; `pending` counts all recordings needing refresh at the start, including those subsequently updated. Refresh the browser after completion to discard previously loaded audio.
 
 ## API and validation
 
@@ -97,7 +110,7 @@ curl --fail --silent --show-error -X POST "$SHAREBRAIN_BASE_URL/api/10words/es/l
   -H "Authorization: Bearer $TEN_WORDS_CLIENT_KEY" -o lesson.wav
 ```
 
-The lesson JSON contains `language`, `lessonNumber`, `words` (ten strings), and `sentences` (ten strings). Audio is binary WAV, not a JSON URL; legacy MP3 fallback is possible when an upgrade is unavailable, so use the response `Content-Type`. Map “Spanish lesson one” to `es` / `Lesson 1`, and “French lesson ten” to `fr` / `Lesson 10`. Discover language names and codes from `/languages` rather than maintaining a separate list. Requests for saved lessons reuse their fixed database content.
+The lesson JSON contains `language`, `lessonNumber`, `words` (ten strings), and `sentences` (ten strings). Audio is binary WAV, not a JSON URL; older unpaused recordings are not played if an upgrade fails. Map “Spanish lesson one” to `es` / `Lesson 1`, and “French lesson ten” to `fr` / `Lesson 10`. Discover language names and codes from `/languages` rather than maintaining a separate list. Requests for saved lessons reuse their fixed database content.
 
 ReplitJevBrowser should call from its backend and deliver audio through its own authenticated endpoint. Pause recognition while audio plays. Its browser needs no ShareBrain key or cross-origin cookies. Use HTTPS. This change supplies ShareBrain access; the voice-agent integration is a separate change.
 

@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { TenWordsService, type LessonStore, type SavedLesson, type LessonGenerator } from "./service";
 import { type TenWordsContent } from "@shared/tenWords";
 
-import { pcmWave } from "./audio";
-const recording = pcmWave(Buffer.from([1, 0, 2, 0]));
+import { joinLessonAudio, pcmWave } from "./audio";
+const pausedRecording = (pcm: Buffer) => joinLessonAudio(Array(10).fill(pcm), pcm);
+const recording = pausedRecording(Buffer.from([1, 0, 2, 0]));
 
 const content: TenWordsContent = {
   words: ["Hola", "Agua", "Comida", "Casa", "Amigo", "Libro", "Bueno", "Sí", "No", "Gracias"],
@@ -102,11 +103,30 @@ describe("fixed 10words lessons", () => {
     const { service, generator, rows, store } = setup();
     await service.getLesson("es", 1);
     rows.get("es:1")!.audioBase64 = Buffer.from("old mp3").toString("base64");
-    expect(await service.getAudio("es", 1)).toEqual(recording);
-    expect(await new TenWordsService(store, generator).getAudio("es", 1)).toEqual(recording);
+    expect((await service.getAudio("es", 1)).equals(recording)).toBe(true);
+    expect((await new TenWordsService(store, generator).getAudio("es", 1)).equals(recording)).toBe(true);
     expect(generator.generate).toHaveBeenCalledTimes(1);
     expect(generator.speak).toHaveBeenCalledTimes(1);
     expect(store.saveAudioIfUnchanged).toHaveBeenCalledWith("es", 1, recording.toString("base64"), Buffer.from("old mp3").toString("base64"));
+  });
+  it("upgrades an ordinary cached WAV rather than mistaking its format for pauses", async () => {
+    const { service, generator, rows } = setup();
+    const saved = await service.getLesson("es", 1);
+    rows.get("es:1")!.audioBase64 = pcmWave(Buffer.from([1, 0, 2, 0])).toString("base64");
+    expect((await service.getAudio("es", 1)).equals(recording)).toBe(true);
+    expect(await service.getLesson("es", 1)).toEqual(saved);
+    expect(generator.generate).toHaveBeenCalledTimes(1);
+    expect(generator.speak).toHaveBeenCalledTimes(1);
+  });
+  it("rejects generated WAV audio that has no pauses without replacing cached bytes", async () => {
+    const { service, generator, rows, store } = setup();
+    await service.getLesson("es", 1);
+    const previous = pcmWave(Buffer.from([1, 0])).toString("base64");
+    rows.get("es:1")!.audioBase64 = previous;
+    vi.mocked(generator.speak).mockResolvedValueOnce(pcmWave(Buffer.from([2, 0])));
+    await expect(service.getAudio("es", 1)).rejects.toThrow("Invalid paused lesson audio");
+    expect(rows.get("es:1")!.audioBase64).toBe(previous);
+    expect(store.saveAudioIfUnchanged).not.toHaveBeenCalled();
   });
   it("preserves old audio and text when an upgrade fails, then retries", async () => {
     const { service, generator, rows } = setup();
@@ -114,10 +134,10 @@ describe("fixed 10words lessons", () => {
     const oldAudio = Buffer.from("ID3old mp3").toString("base64");
     rows.get("es:1")!.audioBase64 = oldAudio;
     vi.mocked(generator.speak).mockRejectedValueOnce(new Error("TTS unavailable"));
-    expect(await service.getAudio("es", 1)).toEqual(Buffer.from(oldAudio, "base64"));
+    await expect(service.getAudio("es", 1)).rejects.toThrow("TTS unavailable");
     expect(rows.get("es:1")!.audioBase64).toBe(oldAudio);
     expect(await service.getLesson("es", 1)).toEqual(saved);
-    expect(await service.getAudio("es", 1)).toEqual(recording);
+    expect((await service.getAudio("es", 1)).equals(recording)).toBe(true);
     expect(generator.generate).toHaveBeenCalledTimes(1);
   });
   it("does not save incomplete audio", async () => {
@@ -130,10 +150,10 @@ describe("fixed 10words lessons", () => {
     const { service, generator, store } = setup();
     vi.mocked(store.saveAudioIfUnchanged).mockImplementationOnce(async (language, number) => {
       const row = await store.find(language, number);
-      if (row) row.audioBase64 = pcmWave(Buffer.from([3, 0])).toString("base64");
+      if (row) row.audioBase64 = pausedRecording(Buffer.from([3, 0])).toString("base64");
     });
     const results = await Promise.all([service.getAudio("es", 1), service.getAudio("es", 1)]);
-    expect(results).toEqual([pcmWave(Buffer.from([3, 0])), pcmWave(Buffer.from([3, 0]))]);
+    expect(results.every(result => result.equals(pausedRecording(Buffer.from([3, 0]))))).toBe(true);
     expect(generator.speak).toHaveBeenCalledTimes(1);
   });
 });

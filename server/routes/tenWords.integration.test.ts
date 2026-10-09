@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { lessonText, type TenWordsLesson } from "@shared/tenWords";
 import { createTenWordsRouter } from "./tenWords";
 import { TenWordsService, type LessonStore, type SavedLesson } from "../services/tenWords/service";
-import { pcmWave } from "../services/tenWords/audio";
+import { joinLessonAudio } from "../services/tenWords/audio";
 
 const spanishLesson = {
   language: "es",
@@ -56,7 +56,7 @@ function testApp(service: TenWordsService, authenticated = true) {
 describe("10words router and service integration", () => {
   it("keeps Spanish text and native-only audio identical across requests and a fresh service", async () => {
     const store = isolatedStore();
-    const audio = pcmWave(Buffer.from([1, 0, 2, 0]));
+    const audio = joinLessonAudio(Array(10).fill(Buffer.from([1, 0])), Buffer.from([2, 0]));
     const generator = {
       generate: vi.fn(async () => ({
         words: structuredClone(spanishLesson.words),
@@ -74,13 +74,13 @@ describe("10words router and service integration", () => {
 
     const narrated = await request(app).post("/api/10words/es/lessons/1/audio")
       .expect(200).expect("Content-Type", /audio\/wav/);
-    expect(narrated.body).toEqual(audio);
+    expect(narrated.body.equals(audio)).toBe(true);
     expect(generator.speak).toHaveBeenCalledExactlyOnceWith({
       words: spanishLesson.words, sentences: spanishLesson.sentences,
     });
     expect((await request(app).post("/api/10words/es/lesson").send({ command: "Lesson 1" }).expect(200)).body)
       .toEqual(first.body);
-    expect((await request(app).post("/api/10words/es/lessons/1/audio").expect(200)).body).toEqual(narrated.body);
+    expect((await request(app).post("/api/10words/es/lessons/1/audio").expect(200)).body.equals(narrated.body)).toBe(true);
 
     const forbiddenGenerator = {
       generate: vi.fn(async () => { throw new Error("A saved lesson must not regenerate"); }),
@@ -89,14 +89,14 @@ describe("10words router and service integration", () => {
     const restarted = testApp(new TenWordsService(store, forbiddenGenerator));
     expect((await request(restarted).post("/api/10words/es/lesson").send({ command: "Lesson 1" }).expect(200)).body)
       .toEqual(first.body);
-    expect((await request(restarted).post("/api/10words/es/lessons/1/audio").expect(200)).body).toEqual(narrated.body);
+    expect((await request(restarted).post("/api/10words/es/lessons/1/audio").expect(200)).body.equals(narrated.body)).toBe(true);
     expect(generator.generate).toHaveBeenCalledTimes(1);
     expect(generator.speak).toHaveBeenCalledTimes(1);
     expect(forbiddenGenerator.generate).not.toHaveBeenCalled();
     expect(forbiddenGenerator.speak).not.toHaveBeenCalled();
   });
 
-  it("serves legacy MP3 with its real MIME type when the paused-audio upgrade is unavailable", async () => {
+  it("reports a failed upgrade instead of playing unpaused legacy MP3", async () => {
     const store = isolatedStore();
     const legacy = Buffer.from("ID3saved-mp3-fixture");
     await store.insertOnce(spanishLesson);
@@ -107,8 +107,8 @@ describe("10words router and service integration", () => {
     };
     const app = testApp(new TenWordsService(store, generator));
     const response = await request(app).post("/api/10words/es/lessons/1/audio")
-      .expect(200).expect("Content-Type", /audio\/mpeg/);
-    expect(response.body).toEqual(legacy);
+      .expect(503).expect("Content-Type", /application\/json/);
+    expect(response.body.message).toContain("Audio is unavailable");
     expect((await store.find("es", 1))?.audioBase64).toBe(legacy.toString("base64"));
     expect(generator.generate).not.toHaveBeenCalled();
   });
