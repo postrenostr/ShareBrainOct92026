@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, real, json, varchar, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, real, json, varchar, index, unique, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1326,3 +1326,13 @@ export type InsertBrainPayment = z.infer<typeof insertBrainPaymentSchema>;
 export type AgentScriptHistory = typeof agentScriptHistory.$inferSelect;
 export const insertAgentScriptHistorySchema = createInsertSchema(agentScriptHistory);
 export type InsertAgentScriptHistory = z.infer<typeof insertAgentScriptHistorySchema>;
+
+// Separate fixed lessons for the 10words language agents. Existing teacher caches are untouched.
+export const tenWordsLessons = pgTable("ten_words_lessons", {
+  language: varchar("language", { length: 10 }).notNull(),
+  lessonNumber: integer("lesson_number").notNull(),
+  words: json("words").$type<string[]>().notNull(),
+  sentences: json("sentences").$type<string[]>().notNull(),
+  audioBase64: text("audio_base64"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.language, table.lessonNumber] })]);
