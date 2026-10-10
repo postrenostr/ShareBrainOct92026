@@ -215,3 +215,5 @@ production upgrade.
 `npm run test:10words:db` verifies the real SQL and locking with isolated
 development schemas and mock audio generation, without paid calls or changes to
 application lesson records.
+
+HD audio maintenance is available in the administrator panel at `/admin` (or `/test/admin` in the test area), rather than on the 10words language catalog. Existing progress is preserved; moving the controls does not restart upgrades or change recordings. The panel and maintenance API retain their existing administrator access checks.
