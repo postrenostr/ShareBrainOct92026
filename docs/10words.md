@@ -146,8 +146,8 @@ Lessons run sequentially. Each successful replacement is saved immediately; prov
 
 ## Controlled published-app HD upgrade
 
-For production, prefer the **Saved lesson HD upgrade** administrator control on the
-10words language catalog. It uses the running app's existing database connection
+For production, prefer the **HD audio maintenance** control in the
+administrator panel at `/admin`. It uses the running app's existing database connection
 and OpenAI configuration; no production connection string needs to be copied into
 the workspace. Only the existing session administrator can access it. Client API
 keys and ordinary signed-in users cannot trigger maintenance.
@@ -161,8 +161,8 @@ keys and ordinary signed-in users cannot trigger maintenance.
    production through the publishing schema diff. **Preserve production data;
    do not overwrite it with development data.** Never run this migration in the
    published process.
-3. Sign in as the administrator on the published site, open **10words**, and
-   check that the control says **Production**.
+3. Sign in as the administrator on the published site, open `/admin`, and
+   check that the **HD audio maintenance** control says **Production**.
 4. Confirm **UPGRADE SAVED AUDIO** and start. This snapshots every lesson that
    exists at that moment, including missing audio. Generation has normal paid
    OpenAI charges. Keep the page open; processing is one lesson per request.
